@@ -15,7 +15,6 @@ struct MeasurementDetailView: View {
                     }
                     if r.multiServerSuspected { multiServerCard(r) }
                     if r.accuracy != nil { driftCard(r) }
-                    if r.source == .navyism { navyismNote }
                 }
                 .padding(16)
             } else {
@@ -38,12 +37,9 @@ struct MeasurementDetailView: View {
                 }
                 Text("표시되는 서버시간은 실제 서버시간과 대부분 이 범위 안에서 차이 납니다.")
                     .font(.subheadline).foregroundStyle(.secondary)
-            } else {
-                Text("네이비즘 계산값").font(.largeTitle.bold())
             }
             HStack(spacing: 8) {
                 if let c = r.confidence { Badge(text: "신뢰도 " + c.title, tint: c.color) }
-                Badge(text: r.source == .navyism ? "네이비즘" : "직접 측정", tint: Theme.secondary)
                 Badge(text: "서버 " + Fmt.signedSec(r.offset), tint: Theme.secondary)
             }
         }
@@ -121,14 +117,6 @@ struct MeasurementDetailView: View {
                 }
             }
             Text("폰 시계는 시간이 지나며 조금씩 어긋납니다(분당 약 0.6ms 가정). 오픈 3–5분 전에 한 번 더 측정하면 가장 정확합니다. 일정을 등록하면 자동으로 재측정합니다.")
-                .font(.footnote).foregroundStyle(.secondary)
-        }
-    }
-
-    private var navyismNote: some View {
-        Card {
-            Text("네이비즘 계산값에 대해").font(.headline)
-            Text("네이비즘은 사이트와의 차이를 초 단위로만 반영하고, 밀리초는 네이비즘 자체 서버 시계 + −900ms 보정으로 정해집니다. 그래서 오차 범위를 계산할 수 없고, 실제 서버시간보다 수백 ms 늦을 수 있습니다.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

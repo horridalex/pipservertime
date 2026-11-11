@@ -79,28 +79,6 @@ final class ClockFormatTests: XCTestCase {
     }
 }
 
-final class NavyismParseTests: XCTestCase {
-    func testParsesPageValuesAndOffset() throws {
-        let html = """
-        <script>
-        var mgap = 743;
-        var thisTime2\t= 1794396026;
-        var mgval = new Date().getTime() - (thisTime2 * 1000 + mgap);
-        function startShow() { show(1794396026 - time() + 0); }
-        mgval = mgval + 900;
-        </script>
-        """
-        let v = try NavyismTimeSource.parse(html)
-        XCTAssertEqual(v, .init(mgap: 743, thisTime2: 1794396026, targetSeconds: 1794396026, targetAdjust: 0, mgvalAdjust: 900))
-        let offset = v.offset(scriptExecutedAt: Date(timeIntervalSince1970: 1_794_396_027))
-        XCTAssertEqual(offset, -1.157, accuracy: 0.0001)
-    }
-
-    func testDetectsMissingTime() {
-        XCTAssertThrowsError(try NavyismTimeSource.parse("<script>show('e');</script>"))
-    }
-}
-
 final class MiscTests: XCTestCase {
     func testBeepWavHeader() {
         let data = BeepPlayer.wav(frequency: 880, duration: 0.01)
@@ -110,7 +88,7 @@ final class MiscTests: XCTestCase {
 
     func testProjectedAccuracyGrowsWithDrift() {
         let t = Date(timeIntervalSince1970: 1_000_000)
-        let r = SyncResult(offset: 0.1, accuracy: 0.05, source: .direct, host: "x", siteName: "x", syncedAt: t)
+        let r = SyncResult(offset: 0.1, accuracy: 0.05, siteName: "x", syncedAt: t)
         XCTAssertEqual(r.projectedAccuracy(at: t) ?? 0, 0.05, accuracy: 1e-9)
         XCTAssertEqual(r.projectedAccuracy(at: t.addingTimeInterval(600)) ?? 0, 0.056, accuracy: 1e-9)
     }

@@ -57,8 +57,8 @@ enum AccuracyPreset: String, CaseIterable, Codable, Identifiable {
 ///     한꺼번에(동시에) 보냄. 넓게 한 번, 좁혀서 한 번. (하나씩 다음 초를 기다리던 방식보다 훨씬 빠름)
 /// 샘플은 패스를 거치며 계속 누적되고, 최종값 = 전체 샘플이 가장 많이 동의하는 구간의 중앙.
 ///
-/// 참고: Cloudflare `/cdn-cgi/trace` 의 `ts=` 값도 검토했지만 소수점 아래가 실제와 0~1초 사이로
-/// 무작위하게 어긋나 밀리초 기준으로 쓸 수 없어 사용하지 않습니다.
+/// 참고: Cloudflare `/cdn-cgi/trace` 의 `ts=` 값은 소수점 아래가 실제와 0~1초 사이로 무작위하게
+/// 어긋나 밀리초 기준으로 쓸 수 없어 사용하지 않습니다.
 enum DirectServerTimeSource {
 
     struct Sample: Identifiable, Equatable, Sendable {
@@ -98,7 +98,6 @@ enum DirectServerTimeSource {
         var passes: [PassResult]
         var samples: [Sample]
         var usedCount: Int { samples.filter(\.used).count }
-        var totalCount: Int { samples.count }
     }
 
     enum DirectError: LocalizedError {
@@ -297,14 +296,14 @@ private final class MetricsBox: NSObject, URLSessionTaskDelegate, @unchecked Sen
         lock.lock(); _metrics = metrics; lock.unlock()
     }
 
-    /// 리다이렉트는 따라가지 않음 (작업별 대리자가 세션 대리자보다 우선하므로 여기서도 막음)
+    /// 리다이렉트는 따라가지 않음 (3xx 응답에도 Date 가 있고, 왕복 1회만 재기 위해)
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest) async -> URLRequest? { nil }
 }
 
 /// 측정용 HTTP 클라이언트. 리다이렉트를 따라가지 않아(3xx 응답에도 Date 가 있음) 왕복 1회만 잰다.
-final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class HTTPClient: @unchecked Sendable {
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
@@ -312,7 +311,7 @@ final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         config.httpShouldSetCookies = false
         config.httpMaximumConnectionsPerHost = 4   // 경계 보정 샘플 동시 전송
         config.timeoutIntervalForRequest = 10
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        return URLSession(configuration: config)
     }()
     private let lock = NSLock()
     private var _useHead = true
@@ -322,10 +321,6 @@ final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     }
 
     func invalidate() { session.finishTasksAndInvalidate() }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest) async -> URLRequest? { nil }
 
     private func request(_ url: URL, method: String) -> URLRequest {
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!

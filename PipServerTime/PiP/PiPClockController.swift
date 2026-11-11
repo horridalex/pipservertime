@@ -364,11 +364,6 @@ extension PiPClockController: AVPictureInPictureSampleBufferPlaybackDelegate {
 }
 
 extension PiPClockController: AVPictureInPictureControllerDelegate {
-    nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
-                                                failedToStartPictureInPictureWithError error: Error) {
-        print("PiP 시작 실패:", error)
-    }
-
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         Task { @MainActor in self.didStart() }
     }

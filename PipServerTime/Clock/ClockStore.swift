@@ -137,7 +137,7 @@ final class ClockStore: ObservableObject {
         didSet { Self.defaults.set(try? JSONEncoder().encode(customPresets), forKey: "customPresets") }
     }
 
-    /// 기본 제공 사이트. 네이비즘 이용자들이 실제로 많이 찾는 티켓팅 호스트 기준.
+    /// 기본 제공 사이트 (많이 쓰는 티켓팅 호스트).
     /// (예매창이 다른 서버로 열리는 사이트는 그 예매창 주소를 저장하는 게 가장 정확)
     static let builtInPresets: [Preset] = [
         Preset(name: "NOL 티켓(인터파크)", url: "https://tickets.interpark.com"),
@@ -218,7 +218,7 @@ final class ClockStore: ObservableObject {
         guard let url = URLNormalizer.normalize(urlText) else { return }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let preset = Preset(name: trimmed.isEmpty ? (url.host ?? url.absoluteString) : trimmed,
-                            url: url.absoluteString, isCustom: true)
+                            url: url.absoluteString)
         customPresets.removeAll { $0.url == preset.url }
         customPresets.insert(preset, at: 0)
         siteName = preset.name
@@ -289,7 +289,7 @@ final class ClockStore: ObservableObject {
                 }
             }
             guard syncToken == token, !Task.isCancelled else { return }
-            apply(SyncResult(offset: r.offset, accuracy: r.accuracy, source: .direct, host: target.host ?? text,
+            apply(SyncResult(offset: r.offset, accuracy: r.accuracy,
                              siteName: name, syncedAt: Date(), confidence: r.confidence,
                              rttMedian: r.rttMedian, rttMin: r.rttMin,
                              passes: r.passes, samples: r.samples,
@@ -362,9 +362,7 @@ final class ClockStore: ObservableObject {
         let red = redBeforeMinute, beep = beepMode
         let next = nextEvent
         let style = pipStyle
-        let accText: String? = result.map { r in
-            r.accuracy.map { String(format: "오차 ±%.0fms", $0 * 1000) } ?? "네이비즘 계산값"
-        }
+        let accText: String? = result?.accuracy.map { String(format: "오차 ±%.0fms", $0 * 1000) }
         clock.update {
             $0.style = style
             $0.accuracyText = accText

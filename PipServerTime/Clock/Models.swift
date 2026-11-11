@@ -1,26 +1,6 @@
 import Foundation
 import CoreGraphics
 
-/// 서버시간을 어디서 가져올지
-enum SyncSource: String, CaseIterable, Identifiable, Codable {
-    /// 직접 측정 우선, 실패하면 네이비즘
-    case auto
-    /// 앱이 대상 사이트의 HTTP Date 헤더로 직접 측정 (ms 단위)
-    case direct
-    /// 네이비즘(time.navyism.com) 계산값 그대로
-    case navyism
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .auto: return "자동"
-        case .direct: return "직접 측정"
-        case .navyism: return "네이비즘"
-        }
-    }
-}
-
 enum SyncConfidence: String, Codable {
     case high, medium, low
     var title: String {
@@ -60,7 +40,6 @@ enum BeepMode: String, CaseIterable, Identifiable, Codable {
 struct Preset: Hashable, Codable, Identifiable {
     var name: String
     var url: String
-    var isCustom = false
     var id: String { url }
 }
 
@@ -77,11 +56,8 @@ struct ScheduledEvent: Identifiable, Codable, Equatable {
 struct SyncResult: Equatable {
     /// 서버시간 - 기기시간 (초). 서버시간 = Date() + offset
     var offset: TimeInterval
-    /// 추정 오차 (± 초), 모르면 nil
+    /// 추정 오차 (± 초)
     var accuracy: TimeInterval?
-    /// 실제 사용된 방식
-    var source: SyncSource
-    var host: String
     var siteName: String
     var syncedAt: Date
     var confidence: SyncConfidence?
