@@ -249,14 +249,18 @@ struct ContentView: View {
 
 struct PiPButton: View {
     @ObservedObject var pip: PiPClockController
+    @State private var showOptions = false
 
     var body: some View {
-        Button { pip.toggle() } label: {
+        Button {
+            if pip.isActive { pip.toggle() } else { showOptions = true }
+        } label: {
             Label(pip.isActive ? "팝업 닫기" : "팝업 타이머",
                   systemImage: pip.isActive ? "pip.exit" : "pip.enter")
                 .bold().frame(maxWidth: .infinity, minHeight: 50)
         }
         .buttonStyle(.borderedProminent)
         .disabled(!pip.isPossible && !pip.isActive)
+        .sheet(isPresented: $showOptions) { PiPStartSheet() }
     }
 }

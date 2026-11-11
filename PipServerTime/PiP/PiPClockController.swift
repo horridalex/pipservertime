@@ -15,6 +15,8 @@ final class PiPClockController: NSObject, ObservableObject {
 
     /// PiP 앞/뒤 버튼을 눌렀을 때 (true = 앞당기기)
     var onSkip: ((Bool) -> Void)?
+    /// PiP 시작 시 호출: 자동으로 닫을 서버시각 (nil = 안 닫음)
+    var autoCloseProvider: (() -> Date?)?
 
     /// 앱 화면 안의 미리보기와 PiP 원본을 겸하는 뷰 (PiP 를 쓰려면 레이어가 화면에 붙어 있어야 함)
     let displayView = SampleBufferView()
@@ -26,6 +28,9 @@ final class PiPClockController: NSObject, ObservableObject {
     init(clock: DisplayClock) {
         loop = ClockFrameLoop(clock: clock, layer: displayView.sampleLayer)
         super.init()
+        loop.onAutoClose = { [weak self] in
+            Task { @MainActor in self?.pipController?.stopPictureInPicture() }
+        }
         displayView.sampleLayer.videoGravity = .resizeAspect
         displayView.backgroundColor = .black
         setupPiP()
@@ -65,6 +70,15 @@ final class PiPClockController: NSObject, ObservableObject {
     }
 
     fileprivate nonisolated var playbackTime: CMTime { loop.currentTime }
+
+    fileprivate func didStart() {
+        let target = autoCloseProvider?()
+        loop.setAutoClose(target)
+    }
+
+    fileprivate func didStop() {
+        loop.setAutoClose(nil)
+    }
 }
 
 /// 백그라운드(PiP 중)에도 돌아가야 하므로 CADisplayLink 대신 GCD 타이머로 프레임을 공급합니다.
@@ -78,6 +92,12 @@ final class ClockFrameLoop: @unchecked Sendable {
     private var lastKey = ""
     private var lastSecond: Double = 0
     private let timebase: CMTimebase?
+    /// 자동 닫기 시각에 도달했을 때 (렌더 큐에서 호출)
+    var onAutoClose: (() -> Void)?
+
+    func setAutoClose(_ date: Date?) {
+        clock.update { $0.autoCloseAt = date }
+    }
 
     init(clock: DisplayClock, layer: AVSampleBufferDisplayLayer) {
         self.clock = clock
@@ -113,6 +133,12 @@ final class ClockFrameLoop: @unchecked Sendable {
         let now = Date().addingTimeInterval(cfg.offset)
         let t = now.timeIntervalSince1970
         let second = floor(t)
+
+        // 지정한 서버시각(보정 제외)에 도달하면 PiP 닫기 (한 번만)
+        if let closeAt = cfg.autoCloseAt, Date().addingTimeInterval(cfg.serverOffset) >= closeAt {
+            clock.update { $0.autoCloseAt = nil }
+            onAutoClose?()
+        }
 
         // 카운트다운 소리
         if second != lastSecond {
@@ -205,6 +231,14 @@ extension PiPClockController: AVPictureInPictureControllerDelegate {
     nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
                                                 failedToStartPictureInPictureWithError error: Error) {
         print("PiP 시작 실패:", error)
+    }
+
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        Task { @MainActor in self.didStart() }
+    }
+
+    nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        Task { @MainActor in self.didStop() }
     }
 }
 

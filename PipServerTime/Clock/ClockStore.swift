@@ -74,6 +74,36 @@ final class ClockStore: ObservableObject {
         didSet { Self.defaults.set(colorMode.rawValue, forKey: "colorMode") }
     }
 
+    // MARK: - PiP 자동 닫기
+
+    /// 지정한 서버시각에 PiP 자동으로 닫기 (좌석 선택·결제 화면을 가리지 않도록)
+    @Published var autoClosePiP: Bool = UserDefaults.standard.bool(forKey: "autoClosePiP") {
+        didSet { Self.defaults.set(autoClosePiP, forKey: "autoClosePiP") }
+    }
+    /// 닫는 시각 (하루 중 초, 서버시간 기준)
+    @Published var autoCloseSecondOfDay: Int = UserDefaults.standard.object(forKey: "autoCloseSecondOfDay") as? Int ?? 0 {
+        didSet { Self.defaults.set(autoCloseSecondOfDay, forKey: "autoCloseSecondOfDay") }
+    }
+
+    /// 지금 서버시각 이후 처음 오는 '닫는 시각'
+    func nextAutoCloseDate() -> Date? {
+        guard autoClosePiP else { return nil }
+        let serverNow = Date().addingTimeInterval(result?.offset ?? 0)
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: serverNow)
+        var target = start.addingTimeInterval(TimeInterval(autoCloseSecondOfDay))
+        if target <= serverNow { target = cal.date(byAdding: .day, value: 1, to: target) ?? target.addingTimeInterval(86_400) }
+        return target
+    }
+
+    /// 시트 기본값: 다음 일정 시각 + 5초, 없으면 지금부터 5분 뒤
+    func suggestedAutoCloseSecondOfDay() -> Int {
+        let serverNow = Date().addingTimeInterval(result?.offset ?? 0)
+        let base = nextEvent.map { $0.date.addingTimeInterval(5) } ?? serverNow.addingTimeInterval(300)
+        let start = Calendar.current.startOfDay(for: base)
+        return Int(base.timeIntervalSince(start)) % 86_400
+    }
+
     // MARK: - 일정
 
     @Published private(set) var events: [ScheduledEvent] = {
@@ -140,6 +170,8 @@ final class ClockStore: ObservableObject {
             guard let self else { return }
             self.pipAdjustMs += forward ? self.pipStepMs : -self.pipStepMs
         }
+        // PiP 가 (버튼이든 홈으로 나가서든) 시작될 때마다 자동 닫기 시각 적용
+        pip.autoCloseProvider = { [weak self] in self?.nextAutoCloseDate() }
         pushConfig()
         startEventTimer()
     }

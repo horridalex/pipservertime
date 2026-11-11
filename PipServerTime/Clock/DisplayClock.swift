@@ -15,6 +15,8 @@ struct DisplayConfig: Equatable {
     var redBeforeMinute: Bool = false
     var beepMode: BeepMode = .off
     var nextEvent: ScheduledEvent?
+    /// 이 서버시각(보정 제외)이 되면 PiP 자동으로 닫기
+    var autoCloseAt: Date?
 }
 
 final class DisplayClock: @unchecked Sendable {

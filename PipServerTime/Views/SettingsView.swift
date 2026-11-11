@@ -120,6 +120,15 @@ struct SettingsView: View {
                 ForEach(BeepMode.allCases) { Text($0.title).tag($0) }
             }
             Toggle("정각 10초 전 빨간 표시", isOn: $store.redBeforeMinute)
+            Toggle(isOn: $store.autoClosePiP) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("지정한 시각에 PiP 자동으로 닫기")
+                    Text(String(format: "서버시간 %02d:%02d:%02d · 팝업 타이머 시작 옵션에서 변경",
+                                store.autoCloseSecondOfDay / 3600, (store.autoCloseSecondOfDay % 3600) / 60,
+                                store.autoCloseSecondOfDay % 60))
+                        .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
             Picker("화면 모드", selection: $store.colorMode) {
                 ForEach(ColorMode.allCases) { Text($0.title).tag($0) }
             }
