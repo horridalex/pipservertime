@@ -179,7 +179,10 @@ final class ClockStore: ObservableObject {
 
     private var syncTask: Task<Void, Never>?
     private var eventTimer: Timer?
-    private var resyncedEventIDs: Set<UUID> = []
+    /// 이미 자동 재측정한 (일정, 단계). 단계 0 = N분 전, 1 = 오픈 직전(1분 30초 전)
+    private var resyncedEventIDs: Set<String> = []
+    /// 오픈 직전 마지막 재측정 시점 (초 전)
+    static let finalResyncLead: TimeInterval = 90
 
     init() {
         let c = DisplayClock()
@@ -230,7 +233,7 @@ final class ClockStore: ObservableObject {
         syncTask?.cancel()
         let text = urlText
         let name = siteName
-        let source = source
+        let source = SyncSource.direct   // 측정 방식은 직접 측정으로 고정
         let level = accuracyLevel
         syncTask = Task { [weak self] in
             await self?.performSync(text: text, name: name, source: source, level: level)
@@ -365,7 +368,7 @@ final class ClockStore: ObservableObject {
         guard let i = events.firstIndex(where: { $0.id == e.id }) else { return }
         events[i] = e
         events.sort { $0.date < $1.date }
-        resyncedEventIDs.remove(e.id)
+        resyncedEventIDs = resyncedEventIDs.filter { !$0.hasPrefix(e.id.uuidString) }
     }
 
     func deleteEvent(_ e: ScheduledEvent) {
@@ -405,10 +408,21 @@ final class ClockStore: ObservableObject {
         pushConfig()
         guard autoResyncMinutes > 0, !isSyncing, let e = nextEvent else { return }
         let remain = e.date.timeIntervalSince(clock.now())
-        let window = Double(autoResyncMinutes) * 60
         // 정각 30초 전부터는 측정하지 않음 (측정 중 결과가 바뀌면 혼란)
-        guard remain <= window, remain > 30, !resyncedEventIDs.contains(e.id) else { return }
-        resyncedEventIDs.insert(e.id)
+        guard remain > 30 else { return }
+        // 1) 설정한 N분 전  2) 오픈 1분 30초 전 한 번 더 (서버 시계가 그 사이 움직이는 경우 대비)
+        let stage: Int
+        if remain <= Self.finalResyncLead {
+            stage = 1
+        } else if remain <= Double(autoResyncMinutes) * 60 {
+            stage = 0
+        } else {
+            return
+        }
+        let key = "\(e.id.uuidString)-\(stage)"
+        guard !resyncedEventIDs.contains(key) else { return }
+        resyncedEventIDs.insert(key)
+        if stage == 1 { resyncedEventIDs.insert("\(e.id.uuidString)-0") }
         if let u = e.url, !u.isEmpty, u != urlText {
             urlText = u
             siteName = URLNormalizer.normalize(u)?.host ?? u

@@ -69,12 +69,6 @@ struct SitePickerView: View {
                     }
                 }
 
-                SectionHeader(text: "측정 방식")
-                SettingsCard {
-                    MenuRow(title: "측정 방식", selection: $store.source,
-                            options: SyncSource.allCases.map { ($0, $0.title) })
-                    CardNote(text: "자동: 직접 측정 → 실패하면 네이비즘. 네이비즘은 사이트와의 차이를 초 단위로만 반영하고 −900ms 보정이 들어가 있어 실제보다 수백 ms 늦을 수 있어요.")
-                }
             }
             .navigationTitle("사이트 선택")
             .navigationBarTitleDisplayMode(.inline)

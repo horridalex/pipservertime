@@ -33,13 +33,11 @@ struct SettingsView: View {
 
             SectionHeader(text: "측정")
             SettingsCard {
-                MenuRow(title: "측정 방식", selection: $store.source,
-                        options: SyncSource.allCases.map { ($0, $0.title) })
-                RowDivider()
                 NavRow(title: "정확도 설정", value: store.accuracyPreset.title) { AccuracyView() }
                 RowDivider()
                 MenuRow(title: "일정 전 자동 재측정", selection: $store.autoResyncMinutes,
                         options: [(0, "끄기")] + [2, 3, 4, 5, 10].map { ($0, "\($0)분 전") })
+                CardNote(text: "켜 두면 설정한 시각과 오픈 1분 30초 전에 한 번 더, 총 두 번 자동으로 다시 측정해요. 앱이나 PiP 가 켜져 있어야 해요.")
             }
 
             SectionHeader(text: "타이머")
