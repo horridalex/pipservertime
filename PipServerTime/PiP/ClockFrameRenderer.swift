@@ -12,6 +12,16 @@ struct RenderLine {
     var share: CGFloat
     var color: UIColor
     var weight: UIFont.Weight = .bold
+    /// 마지막 '.' 뒤(소수점 아래)를 이 색으로
+    var fractionColor: UIColor? = nil
+}
+
+enum PiPPalette {
+    static let background = UIColor(hex: 0x16181D)
+    static let text = UIColor(hex: 0xFBF9F4)
+    static let dim = UIColor(hex: 0xB9BCC4)
+    static let accent = UIColor(hex: 0x12B886)
+    static let alert = UIColor(hex: 0xFF6B6B)
 }
 
 /// 시계 문자열을 CVPixelBuffer → CMSampleBuffer 로 그려서 PiP 레이어에 넣을 수 있게 만듭니다.
@@ -53,7 +63,7 @@ final class ClockFrameRenderer {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
         ) else { return nil }
 
-        ctx.setFillColor(UIColor.black.cgColor)
+        ctx.setFillColor(PiPPalette.background.cgColor)
         ctx.fill(CGRect(origin: .zero, size: size))
 
         // 위아래 여백 6%
@@ -64,7 +74,8 @@ final class ClockFrameRenderer {
         for line in lines {
             let h = usable * line.share / total
             let rect = CGRect(x: 0, y: top - h, width: size.width, height: h)
-            drawCentered(line.text, height: h, weight: line.weight, color: line.color, in: rect, ctx: ctx)
+            drawCentered(line.text, height: h, weight: line.weight, color: line.color,
+                         fractionColor: line.fractionColor, in: rect, ctx: ctx)
             top -= h
         }
 
@@ -93,11 +104,15 @@ final class ClockFrameRenderer {
 
     /// 높이에 맞춘 글자 크기로 그리되, 폭을 넘으면 비율대로 줄임 (고정폭 숫자라 숫자가 바뀌어도 흔들리지 않음)
     private func drawCentered(_ string: String, height: CGFloat, weight: UIFont.Weight,
-                              color: UIColor, in rect: CGRect, ctx: CGContext) {
+                              color: UIColor, fractionColor: UIColor?, in rect: CGRect, ctx: CGContext) {
         func makeLine(_ size: CGFloat) -> CTLine {
             let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
-            return CTLineCreateWithAttributedString(
-                NSAttributedString(string: string, attributes: [.font: font, .foregroundColor: color]))
+            let attr = NSMutableAttributedString(string: string, attributes: [.font: font, .foregroundColor: color])
+            if let fractionColor, let dot = string.lastIndex(of: ".") {
+                let range = NSRange(dot..<string.endIndex, in: string)
+                attr.addAttribute(.foregroundColor, value: fractionColor, range: range)
+            }
+            return CTLineCreateWithAttributedString(attr)
         }
         var fontSize = max(6, height * 0.78)
         var line = makeLine(fontSize)

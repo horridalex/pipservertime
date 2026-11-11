@@ -21,6 +21,7 @@ struct MeasurementDetailView: View {
                 Text("아직 측정 결과가 없습니다.").foregroundStyle(.secondary).padding(40)
             }
         }
+        .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("측정 근거")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -31,7 +32,7 @@ struct MeasurementDetailView: View {
             if let a = r.accuracy {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "±%.0f", a * 1000))
-                        .font(.system(size: 64, weight: .bold, design: .rounded)).foregroundStyle(.blue)
+                        .font(.system(size: 64, weight: .bold, design: .rounded)).foregroundStyle(Theme.accentText)
                     Text("ms").font(.title.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 Text("표시되는 서버시간은 실제 서버시간과 대부분 이 범위 안에서 차이 납니다.")
@@ -41,8 +42,8 @@ struct MeasurementDetailView: View {
             }
             HStack(spacing: 8) {
                 if let c = r.confidence { Badge(text: "신뢰도 " + c.title, tint: c.color) }
-                Badge(text: r.source == .navyism ? "네이비즘" : "직접 측정", tint: .secondary)
-                Badge(text: "서버 " + Fmt.signedSec(r.offset), tint: .secondary)
+                Badge(text: r.source == .navyism ? "네이비즘" : "직접 측정", tint: Theme.secondary)
+                Badge(text: "서버 " + Fmt.signedSec(r.offset), tint: Theme.secondary)
             }
         }
     }
@@ -56,13 +57,13 @@ struct MeasurementDetailView: View {
             }
             Chart(r.samples) { s in
                 PointMark(x: .value("순서", s.id), y: .value("RTT", s.rtt * 1000))
-                    .foregroundStyle(s.used ? Color.blue : Color.gray.opacity(0.6))
+                    .foregroundStyle(s.used ? Theme.accentText : Color.gray.opacity(0.6))
                     .symbolSize(s.boundary ? 60 : 30)
             }
             .chartXAxis(.hidden)
             .frame(height: 180)
             HStack(spacing: 16) {
-                Label("계산에 사용 \(r.usedCount)", systemImage: "circle.fill").foregroundStyle(.blue)
+                Label("계산에 사용 \(r.usedCount)", systemImage: "circle.fill").foregroundStyle(Theme.accentText)
                 Label("지연이 커서 제외 \(r.samples.count - r.usedCount)", systemImage: "circle.fill")
                     .foregroundStyle(.gray)
             }
@@ -91,7 +92,7 @@ struct MeasurementDetailView: View {
             HStack {
                 Text("중앙값").bold()
                 Spacer()
-                Text(String(format: "%+.0fms", r.offset * 1000)).font(.body.monospaced().bold()).foregroundStyle(.blue)
+                Text(String(format: "%+.0fms", r.offset * 1000)).font(.body.monospaced().bold()).foregroundStyle(Theme.accentText)
             }
         }
     }

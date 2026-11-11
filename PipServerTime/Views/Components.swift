@@ -6,17 +6,18 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) { content }
-            .padding(20)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(.secondarySystemBackground)))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.primary.opacity(0.06)))
+            .foregroundStyle(Theme.ink)
+            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Theme.border))
     }
 }
 
 /// 작은 캡슐 배지
 struct Badge: View {
     var text: String
-    var tint: Color = .blue
+    var tint: Color = Theme.accentText
 
     var body: some View {
         Text(text)
@@ -27,10 +28,13 @@ struct Badge: View {
     }
 }
 
-/// 측정 중 샘플 막대 (파랑 = 계산에 사용, 회색 = 지연이 커서 제외, 흐림 = 아직 안 보냄)
+/// 측정 중 샘플 막대 (민트 = 계산에 사용, 회색 = 지연이 커서 제외, 흐림 = 아직 안 보냄)
 struct SampleBars: View {
     var samples: [DirectServerTimeSource.Sample]
     var planned: Int
+    var usedColor: Color = Theme.accent
+    var excludedColor: Color = Color.gray.opacity(0.6)
+    var pendingColor: Color = Color.gray.opacity(0.25)
 
     var body: some View {
         GeometryReader { geo in
@@ -43,11 +47,11 @@ struct SampleBars: View {
                     if i < samples.count {
                         let s = samples[i]
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(s.used ? Color.blue : Color.gray.opacity(0.6))
+                            .fill(s.used ? usedColor : excludedColor)
                             .frame(width: w, height: max(6, geo.size.height * CGFloat(s.rtt / maxRTT)))
                     } else {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.gray.opacity(0.25))
+                            .fill(pendingColor)
                             .frame(width: w, height: geo.size.height * 0.25)
                     }
                 }
@@ -64,7 +68,7 @@ struct ClockPreview: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIView {
         let container = UIView()
-        container.backgroundColor = .black
+        container.backgroundColor = PiPPalette.background
         container.layer.cornerRadius = 12
         container.clipsToBounds = true
         let v = pip.displayView
@@ -85,9 +89,9 @@ struct ClockPreview: UIViewRepresentable {
 extension SyncConfidence {
     var color: Color {
         switch self {
-        case .high: return .green
-        case .medium: return .yellow
-        case .low: return .orange
+        case .high: return Theme.accentText
+        case .medium: return Color(UIColor(hex: 0xE67700))
+        case .low: return Theme.warning
         }
     }
 }

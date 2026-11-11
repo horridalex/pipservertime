@@ -7,7 +7,7 @@ struct FocusClockView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            Theme.clockCard.ignoresSafeArea()
 
             TimelineView(.animation(minimumInterval: 0.01)) { ctx in
                 let cfg = store.clock.config
@@ -24,12 +24,12 @@ struct FocusClockView: View {
                         .font(.system(size: 400, weight: .bold, design: .rounded).monospacedDigit())
                         .minimumScaleFactor(0.05)
                         .lineLimit(1)
-                        .foregroundStyle(red ? Color.red : Color.white)
+                        .foregroundStyle(red ? Theme.alert : Theme.clockText)
                         .padding(.horizontal, 12)
                     if let e = store.nextEvent, let remain {
                         Text("\(e.name)  \(remain > 0 ? ClockFormat.countdown(remain) + " 남음" : "시작됨")")
                             .font(.title3.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(remain > 0 && remain < 60 ? Color.red : Color.blue)
+                            .foregroundStyle(remain > 0 && remain < 60 ? Color.red : Theme.accent)
                     }
                     if let r = store.result {
                         Text(infoLine(r))

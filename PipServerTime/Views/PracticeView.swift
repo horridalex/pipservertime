@@ -24,7 +24,7 @@ struct PracticeView: View {
                         .font(.system(size: 52, weight: .bold, design: .rounded).monospacedDigit())
                     if let t = target {
                         Text("목표 " + ClockFormat.time(t, digits: 3))
-                            .font(.title3.monospacedDigit()).foregroundStyle(.blue)
+                            .font(.title3.monospacedDigit()).foregroundStyle(Theme.accentText)
                     }
                 }
             }
@@ -37,7 +37,7 @@ struct PracticeView: View {
                     .frame(maxWidth: .infinity, minHeight: 140)
             }
             .buttonStyle(.borderedProminent)
-            .tint(target == nil ? .blue : .orange)
+            .tint(target == nil ? Theme.clockCard : Theme.accent)
 
             if !results.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -56,7 +56,7 @@ struct PracticeView: View {
                     }
                 }
                 .padding()
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.card))
 
                 if results.count >= rounds {
                     let ms = Int((average * 1000 / 10).rounded()) * 10
@@ -71,6 +71,7 @@ struct PracticeView: View {
             Spacer()
         }
         .padding(20)
+        .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("연습")
         .navigationBarTitleDisplayMode(.inline)
     }

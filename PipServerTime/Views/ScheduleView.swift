@@ -20,7 +20,7 @@ struct ScheduleView: View {
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Text(remain > 0 ? ClockFormat.countdown(remain) + " 남음" : "지남")
                                 .font(.footnote.monospacedDigit())
-                                .foregroundStyle(remain > 0 ? Color.blue : Color.secondary)
+                                .foregroundStyle(remain > 0 ? Theme.accentText : Color.secondary)
                             if let u = e.url, !u.isEmpty {
                                 Text(URL(string: u)?.host ?? u).font(.caption).foregroundStyle(.secondary)
                             }
@@ -32,6 +32,7 @@ struct ScheduleView: View {
                 for i in idx { store.deleteEvent(store.events[i]) }
             }
         }
+        .paperBackground()
         .navigationTitle("일정")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -80,6 +81,7 @@ struct EventEditor: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
+            .paperBackground()
             .navigationTitle(isNew ? "일정 추가" : "일정 수정")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

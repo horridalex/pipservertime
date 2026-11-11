@@ -53,6 +53,7 @@ struct SitePickerView: View {
                     Text("자동: 직접 측정 → 실패하면 네이비즘. 네이비즘은 사이트와의 차이를 초 단위로만 반영하고 −900ms 보정이 들어가 있어 실제보다 수백 ms 늦을 수 있습니다.")
                 }
             }
+            .paperBackground()
             .navigationTitle("사이트 선택")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -80,7 +81,7 @@ struct SitePickerView: View {
                     Text(URL(string: p.url)?.host ?? p.url).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if p.url == store.urlText { Image(systemName: "checkmark").foregroundStyle(.blue) }
+                if p.url == store.urlText { Image(systemName: "checkmark").foregroundStyle(Theme.accentText) }
             }
         }
     }

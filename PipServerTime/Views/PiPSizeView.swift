@@ -20,7 +20,7 @@ struct PiPSizeView: View {
                             }
                             Spacer()
                             if store.pipStyle == style {
-                                Image(systemName: "checkmark").foregroundStyle(.blue).font(.headline)
+                                Image(systemName: "checkmark").foregroundStyle(Theme.accentText).font(.headline)
                             }
                         }
                         .padding(.vertical, 4)
@@ -30,6 +30,7 @@ struct PiPSizeView: View {
                 Text("PiP 가 켜져 있어도 바로 바뀝니다. PiP 창 크기는 손가락으로 벌리거나 오므려 조절할 수 있고, 모양(비율)은 여기서 고른 것을 따릅니다.")
             }
         }
+        .paperBackground()
         .navigationTitle("PiP 크기")
     }
 }
@@ -43,7 +44,7 @@ private struct ShapeIcon: View {
             let w = min(geo.size.width, geo.size.height * aspect)
             let h = w / aspect
             RoundedRectangle(cornerRadius: max(2, h * 0.2))
-                .fill(Color.blue.opacity(0.7))
+                .fill(Theme.accentText.opacity(0.7))
                 .frame(width: w, height: max(2, h))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

@@ -32,7 +32,7 @@ final class PiPClockController: NSObject, ObservableObject {
             Task { @MainActor in self?.pipController?.stopPictureInPicture() }
         }
         displayView.sampleLayer.videoGravity = .resizeAspect
-        displayView.backgroundColor = .black
+        displayView.backgroundColor = PiPPalette.background
         setupPiP()
         loop.start()
     }
@@ -185,8 +185,10 @@ final class ClockFrameLoop: @unchecked Sendable {
     /// PiP 크기별 화면 구성
     static func layout(style: PiPStyle, now: Date, cfg: DisplayConfig,
                        subtitle: String?, highlight: Bool) -> [RenderLine] {
-        let main = highlight ? UIColor(red: 1, green: 0.3, blue: 0.3, alpha: 1) : UIColor(white: 0.9, alpha: 1)
-        let dim = UIColor(white: 0.55, alpha: 1)
+        let main = highlight ? PiPPalette.alert : PiPPalette.text
+        let dim = PiPPalette.dim
+        // 소수점 아래만 민트 (자릿수 0이면 없음)
+        let frac: UIColor? = cfg.digits > 0 ? (highlight ? PiPPalette.alert : PiPPalette.accent) : nil
         let time = ClockFormat.time(now, digits: cfg.digits)
         let full = ClockFormat.full(now, digits: cfg.digits, showDate: cfg.showDate)
         let info = [cfg.accuracyText, subtitle].compactMap { $0 }.joined(separator: "  ·  ")
@@ -195,17 +197,17 @@ final class ClockFrameLoop: @unchecked Sendable {
         case .standard, .square:
             var lines: [RenderLine] = []
             if cfg.showDate { lines.append(RenderLine(text: ClockFormat.dateOnly(now), share: 1, color: dim, weight: .semibold)) }
-            lines.append(RenderLine(text: time, share: style == .square ? 2.2 : 3.2, color: main))
+            lines.append(RenderLine(text: time, share: style == .square ? 2.2 : 3.2, color: main, fractionColor: frac))
             if !info.isEmpty { lines.append(RenderLine(text: info, share: 0.9, color: dim, weight: .medium)) }
             return lines
         case .barL:
-            var lines = [RenderLine(text: full, share: 3, color: main)]
+            var lines = [RenderLine(text: full, share: 3, color: main, fractionColor: frac)]
             if let subtitle { lines.append(RenderLine(text: subtitle, share: 1, color: dim, weight: .medium)) }
             return lines
         case .barM:
-            return [RenderLine(text: full, share: 1, color: main)]
+            return [RenderLine(text: full, share: 1, color: main, fractionColor: frac)]
         case .thin, .ultraSlim:
-            return [RenderLine(text: time, share: 1, color: main)]
+            return [RenderLine(text: time, share: 1, color: main, fractionColor: frac)]
         }
     }
 

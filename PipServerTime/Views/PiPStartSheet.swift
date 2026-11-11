@@ -20,7 +20,7 @@ struct PiPStartSheet: View {
                     Toggle("지정한 시각에 PiP 자동으로 사라지게 하기", isOn: $enabled)
                         .font(.headline)
                         .padding(16)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(Color(.secondarySystemBackground)))
+                        .background(RoundedRectangle(cornerRadius: 20).fill(Theme.card))
 
                     Card {
                         Text("사라지는 시각").font(.headline)
@@ -71,6 +71,7 @@ struct PiPStartSheet: View {
                 .padding(16)
                 .background(.bar)
             }
+            .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("팝업 타이머 시작 옵션")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {

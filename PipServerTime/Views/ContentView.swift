@@ -9,121 +9,119 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
-                    siteRow
+                VStack(spacing: 12) {
+                    header
                     clockCard
-                    if store.result != nil && !store.isSyncing { evidenceCard }
+                    if store.result != nil && !store.isSyncing {
+                        statTiles
+                    }
                     scheduleCard
+                    if !store.isSyncing, let lead = store.result?.recommendedLead {
+                        leadHint(lead)
+                    }
                     if let err = store.lastError {
-                        Text(err).font(.footnote).foregroundStyle(.orange)
+                        Text(err).font(.footnote).foregroundStyle(Theme.warning)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 100)
             }
+            .background(Theme.bg.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) { bottomButtons }
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    NavigationLink { ScheduleView() } label: { Label("일정", systemImage: "calendar") }
-                }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    NavigationLink { PracticeView() } label: { Label("연습", systemImage: "flag.checkered") }
-                    NavigationLink { SettingsView() } label: { Label("설정", systemImage: "gearshape") }
-                }
-            }
-            .navigationTitle("서버시간")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSitePicker) { SitePickerView() }
             .fullScreenCover(isPresented: $showFocus) { FocusClockView() }
         }
         .task { if store.result == nil && !store.isSyncing { store.sync() } }
     }
 
-    // MARK: - 사이트
+    // MARK: - 상단
 
-    private var siteRow: some View {
-        Button { showSitePicker = true } label: {
-            HStack {
-                Circle().fill(dotColor).frame(width: 10, height: 10)
-                Text(store.siteName).font(.title3.bold()).lineLimit(1)
-                Spacer()
-                Label("변경", systemImage: "magnifyingglass")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+    private var header: some View {
+        HStack {
+            Text("서버시간").font(.system(size: 24, weight: .heavy)).foregroundStyle(Theme.ink)
+            Spacer()
+            HStack(spacing: 8) {
+                NavigationLink { ScheduleView() } label: { RoundIconLabel(systemName: "calendar") }
+                    .accessibilityLabel("일정")
+                NavigationLink { PracticeView() } label: { RoundIconLabel(systemName: "stopwatch") }
+                    .accessibilityLabel("연습")
+                NavigationLink { SettingsView() } label: { RoundIconLabel(systemName: "gearshape") }
+                    .accessibilityLabel("설정")
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemBackground)))
         }
-        .buttonStyle(.plain)
+        .padding(.top, 8)
     }
 
-    private var dotColor: Color {
-        if store.isSyncing { return .blue }
-        if let c = store.result?.confidence { return c.color }
-        return store.result == nil ? .gray : .green
-    }
-
-    // MARK: - 서버 시계
+    // MARK: - 시계 카드 (잉크)
 
     private var clockCard: some View {
-        Card {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("서버 시계").font(.headline).foregroundStyle(.secondary)
+                Button { showSitePicker = true } label: {
+                    HStack(spacing: 8) {
+                        Circle().fill(dotColor).frame(width: 8, height: 8)
+                        Text(store.siteName).font(.subheadline.weight(.bold)).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(Theme.clockText)
+                    .padding(.horizontal, 14).frame(height: 36)
+                    .background(Capsule().fill(Theme.clockPill))
+                }
+                .accessibilityLabel("사이트 변경: \(store.siteName)")
                 Spacer()
                 if store.isSyncing {
-                    Badge(text: "측정 중")
+                    pill("측정 중", fill: Theme.accent, text: Theme.clockCard)
                 } else {
                     if abs(store.totalCorrection) >= 0.0005 {
-                        Badge(text: "보정 " + Fmt.signedSec(store.totalCorrection), tint: .secondary)
+                        pill("보정 " + Fmt.signedSec(store.totalCorrection), fill: Theme.clockPill, text: Theme.clockDim)
                     }
                     Button { showFocus = true } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.title3.weight(.semibold))
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Theme.clockText)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Theme.clockPill))
                     }
                     .accessibilityLabel("타이머 집중 화면")
                 }
             }
-
-            // PiP 원본 (PiP 를 켜려면 화면에 있어야 함)
-            ClockPreview(pip: store.pip)
-                .aspectRatio(store.pipStyle.aspect, contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: 180)
 
             if store.isSyncing {
                 measuringBody
             } else {
                 clockBody
             }
+
+            // PiP 원본 (PiP 를 켜려면 화면에 있어야 함)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("PiP 미리보기 · \(store.pipStyle.title)").font(.caption).foregroundStyle(Theme.clockDim)
+                ClockPreview(pip: store.pip)
+                    .aspectRatio(store.pipStyle.aspect, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.clockCardLine))
+            }
         }
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.clockCard))
     }
 
-    private var measuringBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SampleBars(samples: store.liveSamples, planned: store.plannedSamples)
-            HStack {
-                Text(store.statusMessage ?? "측정 중").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("샘플 \(store.liveSamples.count)/\(store.plannedSamples)")
-                    .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-            }
-            Divider()
-            Text("응답이 빨리 온 샘플(파랑)만 골라 계산합니다. 정확도가 높을수록 오래 걸리니 끝날 때까지 화면을 그대로 두세요.")
-                .font(.footnote).foregroundStyle(.secondary)
-            cellularWarning
-        }
+    private func pill(_ text: String, fill: Color, text color: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.bold).monospacedDigit())
+            .foregroundStyle(color)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Capsule().fill(fill))
     }
 
-    @ViewBuilder
-    private var cellularWarning: some View {
-        if network.isCellular {
-            Label {
-                Text("데이터 네트워크 사용 중\n기지국 상황, 이동 상황, 인원 혼잡도에 따라 오차가 증가할 수 있습니다.")
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-            }
-            .font(.footnote).foregroundStyle(.orange)
+    private var dotColor: Color {
+        if store.isSyncing { return Theme.clockDim }
+        guard let r = store.result else { return Theme.clockDim }
+        switch r.confidence {
+        case .low: return Theme.warning
+        case .medium: return Color(UIColor(hex: 0xFAB005))
+        default: return Theme.accent
         }
     }
 
@@ -132,24 +130,38 @@ struct ContentView: View {
             let cfg = store.clock.config
             let server = ctx.date.addingTimeInterval(cfg.offset)
             VStack(alignment: .leading, spacing: 12) {
-                Text(ClockFormat.time(server, digits: store.appDigits))
-                    .font(.system(size: 60, weight: .bold, design: .rounded).monospacedDigit())
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .foregroundStyle(highlight(server) ? Color.red : Color.primary)
-                Divider()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ClockFormat.dateOnly(server)).font(.footnote).foregroundStyle(Theme.clockDim)
+                    clockText(server)
+                }
+                Rectangle().fill(Theme.clockCardLine).frame(height: 1)
                 HStack {
-                    Text("내 폰 시계").foregroundStyle(.secondary)
+                    Text("내 폰 ") + Text(ClockFormat.time(ctx.date, digits: store.appDigits)).monospacedDigit()
                     Spacer()
-                    Text(ClockFormat.time(ctx.date, digits: store.appDigits))
-                        .font(.title2.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    if let r = store.result { diffPill(r.offset) }
                 }
-                if let r = store.result {
-                    differenceBox(r.offset)
-                }
+                .font(.footnote)
+                .foregroundStyle(Theme.clockDim)
             }
         }
+    }
+
+    /// 큰 시계: 소수점 아래만 민트
+    private func clockText(_ server: Date) -> some View {
+        let full = ClockFormat.time(server, digits: store.appDigits)
+        let parts = full.split(separator: ".", maxSplits: 1).map(String.init)
+        let red = highlight(server)
+        return (Text(parts[0]).foregroundColor(red ? Theme.alert : Theme.clockText)
+                + Text(parts.count > 1 ? "." + parts[1] : "").foregroundColor(red ? Theme.alert : Theme.accent))
+            .font(.system(size: 56, weight: .heavy).monospacedDigit())
+            .minimumScaleFactor(0.4)
+            .lineLimit(1)
+    }
+
+    private func diffPill(_ offset: TimeInterval) -> some View {
+        let ms = Int((abs(offset) * 1000).rounded())
+        let text = ms == 0 ? "폰과 같음" : String(format: "서버 %.3f초 %@", abs(offset), offset >= 0 ? "빠름" : "느림")
+        return pill(text, fill: Theme.accent, text: Theme.clockCard)
     }
 
     private func highlight(_ server: Date) -> Bool {
@@ -158,52 +170,63 @@ struct ContentView: View {
         return s >= 60 - DisplayClock.redWindow
     }
 
-    private func differenceBox(_ offset: TimeInterval) -> some View {
-        let sec = String(format: "%.3f초", abs(offset))
-        let ahead = offset >= 0
-        return VStack(alignment: .leading, spacing: 4) {
-            (Text("서버가 내 폰보다 ") + Text(sec).foregroundColor(.blue) + Text(ahead ? " 빠릅니다" : " 느립니다"))
-                .font(.headline)
-            Text(ahead ? "폰 시계를 보고 누르면 그만큼 늦게 도착해요" : "폰 시계를 보고 누르면 그만큼 일찍 도착해요")
-                .font(.footnote).foregroundStyle(.secondary)
+    private var measuringBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("--:--:--.---")
+                .font(.system(size: 56, weight: .heavy).monospacedDigit())
+                .foregroundStyle(Theme.clockCardLine)
+                .minimumScaleFactor(0.4).lineLimit(1)
+            SampleBars(samples: store.liveSamples, planned: store.plannedSamples,
+                       usedColor: Theme.accent, excludedColor: Color(UIColor(hex: 0x4A4D57)),
+                       pendingColor: Theme.clockCardLine)
+            HStack {
+                Text(store.statusMessage ?? "측정 중").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("샘플 \(store.liveSamples.count)/\(store.plannedSamples)").font(.subheadline.monospacedDigit())
+            }
+            .foregroundStyle(Theme.clockText)
+            Text("응답이 빨리 온 샘플(민트)만 골라 계산합니다. 정확도가 높을수록 오래 걸리니 끝날 때까지 화면을 그대로 두세요.")
+                .font(.footnote).foregroundStyle(Theme.clockDim)
+            if network.isCellular {
+                Label("데이터 네트워크 사용 중 · 기지국·이동·혼잡도에 따라 오차가 커질 수 있습니다", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundStyle(Color(UIColor(hex: 0xFFA94D)))
+            }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue.opacity(0.1)))
     }
 
-    // MARK: - 측정 근거
+    // MARK: - 측정 근거 타일
 
-    private var evidenceCard: some View {
-        Card {
-            HStack {
-                Text("측정 근거").font(.headline)
-                Spacer()
-                NavigationLink { MeasurementDetailView() } label: {
-                    HStack(spacing: 2) { Text("자세히"); Image(systemName: "chevron.right") }
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-            if let r = store.result {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    HStack(alignment: .top) {
-                        stat("추정 오차", r.projectedAccuracy(at: ctx.date).map { "±" + Fmt.ms($0) } ?? "네이비즘")
-                        stat("사용 샘플", r.samples.isEmpty ? "—" : "\(r.usedCount)/\(r.samples.count)")
-                        stat("마지막 측정", Fmt.ago(r.syncedAt, now: ctx.date),
-                             warn: ctx.date.timeIntervalSince(r.syncedAt) > 600)
+    private var statTiles: some View {
+        NavigationLink { MeasurementDetailView() } label: {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                if let r = store.result {
+                    HStack(spacing: 8) {
+                        tile("추정 오차", r.projectedAccuracy(at: ctx.date).map { String(format: "±%.0f", $0 * 1000) } ?? "—",
+                             unit: r.accuracy == nil ? nil : "ms")
+                        tile("사용 샘플", r.samples.isEmpty ? "—" : "\(r.usedCount)", unit: r.samples.isEmpty ? nil : "/\(r.samples.count)")
+                        tile("측정", Fmt.ago(r.syncedAt, now: ctx.date), unit: nil,
+                             color: ctx.date.timeIntervalSince(r.syncedAt) > 600 ? Theme.warning : (r.confidence?.color ?? Theme.ink))
                     }
                 }
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("측정 근거 자세히 보기")
     }
 
-    private func stat(_ title: String, _ value: String, warn: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.footnote).foregroundStyle(.secondary)
-            Text(value).font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(warn ? Color.orange : Color.primary)
+    private func tile(_ title: String, _ value: String, unit: String?, color: Color = Theme.ink) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(Theme.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(value).font(.title3.weight(.heavy).monospacedDigit()).foregroundStyle(color)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if let unit { Text(unit).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary) }
+            }
         }
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.border))
     }
 
     // MARK: - 일정
@@ -211,49 +234,79 @@ struct ContentView: View {
     private var scheduleCard: some View {
         NavigationLink { ScheduleView() } label: {
             Card {
-                Text("내 일정").font(.headline)
                 if let e = store.nextEvent {
                     TimelineView(.periodic(from: .now, by: 0.1)) { ctx in
                         let remain = e.date.timeIntervalSince(ctx.date.addingTimeInterval(store.clock.config.offset))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(e.name).font(.title3.bold())
-                            Text(e.date.formatted(date: .abbreviated, time: .standard))
-                                .font(.footnote).foregroundStyle(.secondary)
-                            Text(remain > 0 ? ClockFormat.countdown(remain) + " 남음" : "시작됨")
-                                .font(.title2.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(remain > 0 && remain < 60 ? Color.red : Color.blue)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(e.name).font(.headline.weight(.heavy)).lineLimit(1)
+                                Spacer()
+                                Text(e.date.formatted(date: .omitted, time: .standard))
+                                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                            }
+                            ProgressView(value: progress(remain))
+                                .tint(remain > 0 && remain < 60 ? Theme.alert : Theme.ink)
+                            HStack {
+                                Text(store.autoResyncMinutes > 0 ? "\(store.autoResyncMinutes)분 전 자동 재측정" : "자동 재측정 꺼짐")
+                                    .foregroundStyle(Theme.secondary)
+                                Spacer()
+                                Text(remain > 0 ? ClockFormat.countdown(remain) + " 남음" : "시작됨")
+                                    .fontWeight(.heavy).monospacedDigit()
+                                    .foregroundStyle(remain > 0 && remain < 60 ? Theme.alert : Theme.ink)
+                            }
+                            .font(.footnote)
                         }
                     }
                 } else {
-                    Text("다가오는 일정이 없어요").font(.title3.bold())
-                    Text("일정 보기 · 추가").font(.footnote).foregroundStyle(.secondary)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("다가오는 일정이 없어요").font(.headline.weight(.heavy))
+                            Text("오픈 시각을 등록하면 카운트다운·알림·자동 재측정").font(.footnote).foregroundStyle(Theme.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(Theme.accentText)
+                    }
                 }
             }
         }
         .buttonStyle(.plain)
     }
 
+    /// 1시간 전부터 채워지는 진행 막대
+    private func progress(_ remain: TimeInterval) -> Double {
+        min(1, max(0, 1 - remain / 3600))
+    }
+
+    private func leadHint(_ lead: TimeInterval) -> some View {
+        (Text("요청이 서버까지 가는 데 약 ") + Text(String(format: "%.0fms", lead * 1000)).bold()
+         + Text(store.applyLead ? ". 시계에 이미 반영돼 있어요." : ". 이만큼 먼저 누르면 정각에 도착해요."))
+            .font(.footnote)
+            .foregroundStyle(Theme.accentSoftText)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.accentSoft))
+    }
+
     // MARK: - 하단 버튼
 
     private var bottomButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if store.isSyncing {
-                Button { store.cancelSync() } label: {
-                    Text("취소").bold().frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.bordered)
+                Button("취소") { store.cancelSync() }
+                    .buttonStyle(CapsuleButtonStyle(filled: false))
             } else {
                 Button { store.sync() } label: {
                     Label("다시 측정", systemImage: "arrow.triangle.2.circlepath")
-                        .bold().frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(CapsuleButtonStyle(filled: false))
             }
             PiPButton(pip: store.pip)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(Theme.bg.opacity(0.95).ignoresSafeArea(edges: .bottom))
     }
 }
 
@@ -265,12 +318,15 @@ struct PiPButton: View {
         Button {
             if pip.isActive { pip.toggle() } else { showOptions = true }
         } label: {
-            Label(pip.isActive ? "팝업 닫기" : "팝업 타이머",
-                  systemImage: pip.isActive ? "pip.exit" : "pip.enter")
-                .bold().frame(maxWidth: .infinity, minHeight: 50)
+            HStack(spacing: 8) {
+                Image(systemName: pip.isActive ? "pip.exit" : "pip.enter")
+                    .foregroundStyle(Theme.accent)
+                Text(pip.isActive ? "팝업 닫기" : "팝업 타이머")
+            }
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(CapsuleButtonStyle(filled: true))
         .disabled(!pip.isPossible && !pip.isActive)
+        .opacity(!pip.isPossible && !pip.isActive ? 0.5 : 1)
         .sheet(isPresented: $showOptions) { PiPStartSheet() }
     }
 }

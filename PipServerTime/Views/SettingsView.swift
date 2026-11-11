@@ -12,6 +12,7 @@ struct SettingsView: View {
             displaySection
             scheduleSection
         }
+        .paperBackground()
         .navigationTitle("설정")
     }
 
@@ -23,7 +24,7 @@ struct SettingsView: View {
                 HStack {
                     Text("반응속도를 시계에 반영하기")
                     Spacer()
-                    Text("\(store.reactionAdjustMs)ms").font(.body.monospacedDigit()).foregroundStyle(.blue)
+                    Text("\(store.reactionAdjustMs)ms").font(.body.monospacedDigit()).foregroundStyle(Theme.accentText)
                 }
                 HStack {
                     Button { store.reactionAdjustMs = max(-300, store.reactionAdjustMs - 10) } label: { Image(systemName: "minus") }
@@ -41,7 +42,7 @@ struct SettingsView: View {
                     Text("PiP 내에서 보정 시 단위")
                     Spacer()
                     Text(String(format: "%.2f초", Double(store.pipStepMs) / 1000))
-                        .font(.body.monospacedDigit()).foregroundStyle(.blue)
+                        .font(.body.monospacedDigit()).foregroundStyle(Theme.accentText)
                 }
             }
 
@@ -66,7 +67,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("네트워크 딜레이를 시계에 반영하기")
                     if let lead = store.result?.recommendedLead {
-                        Text(String(format: "현재 약 %.3f초", lead)).font(.footnote.monospacedDigit()).foregroundStyle(.blue)
+                        Text(String(format: "현재 약 %.3f초", lead)).font(.footnote.monospacedDigit()).foregroundStyle(Theme.accentText)
                     } else {
                         Text("직접 측정 후 계산됩니다").font(.footnote).foregroundStyle(.secondary)
                     }
@@ -96,7 +97,7 @@ struct SettingsView: View {
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if store.accuracyPreset == p { Image(systemName: "checkmark").foregroundStyle(.blue) }
+                        if store.accuracyPreset == p { Image(systemName: "checkmark").foregroundStyle(Theme.accentText) }
                     }
                 }
             }
