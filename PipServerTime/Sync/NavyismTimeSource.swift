@@ -75,16 +75,25 @@ enum NavyismTimeSource {
                      forHTTPHeaderField: "User-Agent")
         req.setValue("ko-KR,ko;q=0.9", forHTTPHeaderField: "Accept-Language")
 
-        let (data, response) = try await session.data(for: req)
-        // 브라우저라면 이 시점 즈음 인라인 스크립트가 실행되어 mgval 이 정해짐
-        let tExec = Date()
-
+        // 페이지를 스트리밍으로 받다가, 시계 스크립트(mgval 보정 줄)가 도착한 '그 순간'을 기준 시각으로 잡는다.
+        // 브라우저도 이 스크립트 블록이 도착하자마자 mgval 을 계산하므로, 페이지 나머지(광고·댓글 등)를
+        // 다 받을 때까지 기다리면 그만큼 기준이 늦어진다.
+        let (bytes, response) = try await session.bytes(for: req)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw NavyismError.http(http.statusCode)
         }
-        let html = String(decoding: data, as: UTF8.self)
-        let values = try parse(html)
-        return Result(offset: values.offset(scriptExecutedAt: tExec), accuracy: nil)
+        var lines: [String] = []
+        var tExec: Date?
+        for try await line in bytes.lines {
+            lines.append(line)
+            if line.range(of: #"mgval\s*=\s*mgval\s*[+-]"#, options: .regularExpression) != nil {
+                tExec = Date()
+                break   // 필요한 값은 모두 이 줄 이전에 있음
+            }
+        }
+        let receivedAt = tExec ?? Date()
+        let values = try parse(lines.joined(separator: "\n"))
+        return Result(offset: values.offset(scriptExecutedAt: receivedAt), accuracy: nil)
     }
 
     static func parse(_ html: String) throws -> PageValues {
