@@ -78,16 +78,45 @@ final class PiPClockController: NSObject, ObservableObject {
         loop.setAutoClose(date)
     }
 
-    /// 자동 닫기: 백그라운드에서 한 번에 안 닫히는 경우가 있어 0.3초 간격으로 최대 10번 재시도
-    private func stopForAutoClose(attempt: Int = 0) {
-        guard let pip = pipController, pip.isPictureInPictureActive, attempt < 10 else {
+    /// 자동 닫기.
+    /// 앱이 백그라운드에 있으면 iOS 가 stopPictureInPicture() 를 무시하는 경우가 있어 단계적으로 시도:
+    ///  0) 일반 종료 요청
+    ///  1) 0.3초 뒤에도 떠 있으면 PiP 의 콘텐츠 소스를 떼어냄
+    ///  2) 그래도 떠 있으면 PiP 컨트롤러 자체를 해제 (다음 사용을 위해 잠시 뒤 새로 만듦)
+    private func stopForAutoClose(step: Int = 0) {
+        guard let pip = pipController, pip.isPictureInPictureActive else {
+            autoCloseAt = nil
+            // 콘텐츠 소스를 떼어내서 닫힌 경우: 다음에 다시 켤 수 있도록 새로 구성
+            if pipController?.contentSource == nil {
+                teardownPiP()
+                setupPiP()
+            }
+            return
+        }
+        switch step {
+        case 0:
+            pip.stopPictureInPicture()
+        case 1:
+            pip.contentSource = nil
+        default:
+            teardownPiP()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.setupPiP() }
             autoCloseAt = nil
             return
         }
-        pip.stopPictureInPicture()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.stopForAutoClose(attempt: attempt + 1)
+            self?.stopForAutoClose(step: step + 1)
         }
+    }
+
+    private func teardownPiP() {
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        pipController?.delegate = nil
+        pipController = nil
+        isActive = false
+        isPossible = false
+        loop.setAutoClose(nil)
     }
 
     fileprivate nonisolated var playbackTime: CMTime { loop.currentTime }
