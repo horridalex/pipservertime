@@ -133,6 +133,14 @@ final class PiPClockController: NSObject, ObservableObject {
 
     fileprivate func didStop() {
         arm(nil)
+        // X 로 닫으면 원래 자리에 'This video is playing in picture in picture' 안내가 남는 경우가 있어
+        // 컨트롤러를 새로 만들어 걷어냄 (이전 컨트롤러가 해제되면서 안내도 사라짐)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, self.pipController?.isPictureInPictureActive != true else { return }
+            self.teardownPiP()
+            self.displayView.sampleLayer.flush()
+            self.setupPiP()
+        }
     }
 }
 
@@ -326,6 +334,12 @@ extension PiPClockController: AVPictureInPictureControllerDelegate {
 
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         Task { @MainActor in self.didStart() }
+    }
+
+    /// PiP 창의 '앱으로 돌아가기' 버튼: 바로 복귀 처리
+    nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
+                                                restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(true)
     }
 
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
