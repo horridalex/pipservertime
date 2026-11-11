@@ -12,6 +12,8 @@ import Combine
 final class PiPClockController: NSObject, ObservableObject {
     @Published private(set) var isPossible = false
     @Published private(set) var isActive = false
+    /// 자동으로 닫을 서버시각 (걸려 있으면 화면에 표시)
+    @Published private(set) var autoCloseAt: Date?
 
     /// PiP 앞/뒤 버튼을 눌렀을 때 (true = 앞당기기)
     var onSkip: ((Bool) -> Void)?
@@ -29,7 +31,7 @@ final class PiPClockController: NSObject, ObservableObject {
         loop = ClockFrameLoop(clock: clock, layer: displayView.sampleLayer)
         super.init()
         loop.onAutoClose = { [weak self] in
-            Task { @MainActor in self?.pipController?.stopPictureInPicture() }
+            DispatchQueue.main.async { self?.stopForAutoClose() }
         }
         displayView.sampleLayer.videoGravity = .resizeAspect
         displayView.backgroundColor = PiPPalette.background
@@ -65,19 +67,38 @@ final class PiPClockController: NSObject, ObservableObject {
             pip.stopPictureInPicture()
         } else {
             try? AVAudioSession.sharedInstance().setActive(true)
+            // 시작 알림을 기다리지 않고 바로 자동 닫기 시각을 건다
+            arm(autoCloseProvider?())
             pip.startPictureInPicture()
+        }
+    }
+
+    private func arm(_ date: Date?) {
+        autoCloseAt = date
+        loop.setAutoClose(date)
+    }
+
+    /// 자동 닫기: 백그라운드에서 한 번에 안 닫히는 경우가 있어 0.3초 간격으로 최대 10번 재시도
+    private func stopForAutoClose(attempt: Int = 0) {
+        guard let pip = pipController, pip.isPictureInPictureActive, attempt < 10 else {
+            autoCloseAt = nil
+            return
+        }
+        pip.stopPictureInPicture()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.stopForAutoClose(attempt: attempt + 1)
         }
     }
 
     fileprivate nonisolated var playbackTime: CMTime { loop.currentTime }
 
     fileprivate func didStart() {
-        let target = autoCloseProvider?()
-        loop.setAutoClose(target)
+        // 버튼 외의 경로로 시작된 경우에도 적용
+        if autoCloseAt == nil { arm(autoCloseProvider?()) }
     }
 
     fileprivate func didStop() {
-        loop.setAutoClose(nil)
+        arm(nil)
     }
 }
 

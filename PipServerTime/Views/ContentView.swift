@@ -95,6 +95,7 @@ struct ContentView: View {
                 if store.isSyncing {
                     pill("측정 중", fill: Theme.accent, text: Theme.clockCard)
                 } else {
+                    AutoCloseBadge(pip: store.pip)
                     if abs(store.totalCorrection) >= 0.0005 {
                         pill("보정 " + Fmt.signedSec(store.totalCorrection), fill: Theme.clockPill, text: Theme.clockDim)
                     }
@@ -371,5 +372,21 @@ struct PiPButton: View {
         .disabled(!pip.isActive && (!pip.isPossible || !ready))
         .opacity(!pip.isActive && (!pip.isPossible || !ready) ? 0.45 : 1)
         .sheet(isPresented: $showOptions) { PiPStartSheet() }
+    }
+}
+
+/// PiP 자동 닫기가 걸려 있으면 "자동 닫힘 21:05:06"
+struct AutoCloseBadge: View {
+    @ObservedObject var pip: PiPClockController
+
+    var body: some View {
+        if pip.isActive, let at = pip.autoCloseAt {
+            Label(ClockFormat.time(at, digits: 0), systemImage: "timer")
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(Theme.clockCard)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Theme.accent))
+                .accessibilityLabel("PiP 자동 닫힘 \(ClockFormat.time(at, digits: 0))")
+        }
     }
 }
