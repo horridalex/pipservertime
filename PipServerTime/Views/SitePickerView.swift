@@ -9,55 +9,79 @@ struct SitePickerView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    TextField("예매창 주소 붙여넣기 (예: https://…)", text: $typed)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.go)
-                        .onSubmit(useTyped)
-                    Button("이 주소로 측정", action: useTyped)
-                        .disabled(URLNormalizer.normalize(typed) == nil)
-                    Button("현재 사이트를 내 사이트로 저장") {
+            CardScreen {
+                SectionHeader(text: "직접 입력")
+                SettingsCard {
+                    HStack(spacing: 10) {
+                        Image(systemName: "link").foregroundStyle(Theme.secondary)
+                        TextField("예매창 주소 붙여넣기", text: $typed)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .onSubmit(useTyped)
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .padding(.horizontal, 20).frame(minHeight: 58)
+                    RowDivider()
+                    Button(action: useTyped) {
+                        RowLabel(title: "이 주소로 측정") {
+                            Image(systemName: "arrow.right.circle.fill").font(.title3).foregroundStyle(Theme.accent)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(URLNormalizer.normalize(typed) == nil)
+                    .opacity(URLNormalizer.normalize(typed) == nil ? 0.5 : 1)
+                    RowDivider()
+                    Button {
                         saveName = store.siteName
                         showSave = true
+                    } label: {
+                        RowLabel(title: "현재 사이트를 내 사이트로 저장") {
+                            Image(systemName: "star").foregroundStyle(Theme.secondary)
+                        }
                     }
-                } header: {
-                    Text("직접 입력")
-                } footer: {
-                    Text("가장 정확한 건 실제 예매·신청 버튼을 눌렀을 때 열리는 창의 주소입니다.")
+                    .buttonStyle(.plain)
+                    CardNote(text: "가장 정확한 건 실제 예매·신청 버튼을 눌렀을 때 열리는 창의 주소예요.")
                 }
 
                 if !store.customPresets.isEmpty {
-                    Section("내 사이트") {
-                        ForEach(store.customPresets) { p in row(p) }
-                            .onDelete { idx in
-                                for i in idx { store.deletePreset(store.customPresets[i]) }
-                            }
+                    SectionHeader(text: "내 사이트")
+                    SettingsCard {
+                        ForEach(store.customPresets) { p in
+                            if p.id != store.customPresets.first?.id { RowDivider() }
+                            row(p)
+                                .contextMenu {
+                                    Button("삭제", role: .destructive) { store.deletePreset(p) }
+                                }
+                        }
+                    }
+                    Text("길게 눌러 삭제할 수 있어요.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                }
+
+                SectionHeader(text: "기본 사이트")
+                SettingsCard {
+                    ForEach(ClockStore.builtInPresets) { p in
+                        if p.id != ClockStore.builtInPresets.first?.id { RowDivider() }
+                        row(p)
                     }
                 }
 
-                Section("기본 사이트") {
-                    ForEach(ClockStore.builtInPresets) { p in row(p) }
-                }
-
-                Section {
-                    Picker("측정 방식", selection: $store.source) {
-                        ForEach(SyncSource.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("측정 방식")
-                } footer: {
-                    Text("자동: 직접 측정 → 실패하면 네이비즘. 네이비즘은 사이트와의 차이를 초 단위로만 반영하고 −900ms 보정이 들어가 있어 실제보다 수백 ms 늦을 수 있습니다.")
+                SectionHeader(text: "측정 방식")
+                SettingsCard {
+                    MenuRow(title: "측정 방식", selection: $store.source,
+                            options: SyncSource.allCases.map { ($0, $0.title) })
+                    CardNote(text: "자동: 직접 측정 → 실패하면 네이비즘. 네이비즘은 사이트와의 차이를 초 단위로만 반영하고 −900ms 보정이 들어가 있어 실제보다 수백 ms 늦을 수 있어요.")
                 }
             }
-            .paperBackground()
             .navigationTitle("사이트 선택")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }.foregroundStyle(Theme.ink)
+                }
             }
             .onAppear { typed = store.urlText }
             .alert("내 사이트로 저장", isPresented: $showSave) {
@@ -75,15 +99,13 @@ struct SitePickerView: View {
             store.select(p)
             dismiss()
         } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.name).foregroundStyle(.primary)
-                    Text(URL(string: p.url)?.host ?? p.url).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if p.url == store.urlText { Image(systemName: "checkmark").foregroundStyle(Theme.accentText) }
+            RowLabel(title: p.name, subtitle: URL(string: p.url)?.host ?? p.url) {
+                Image(systemName: "checkmark").font(.body.weight(.bold))
+                    .foregroundStyle(Theme.accentText)
+                    .opacity(p.url == store.urlText ? 1 : 0)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private func useTyped() {

@@ -8,22 +8,22 @@ enum Theme {
     }
 
     /// 화면 바탕
-    static let bg = dynamic(0xF4F1EA, 0x0F1013)
+    static let bg = dynamic(0xF4F1EA, 0x0A0D14)
     /// 카드 바탕
-    static let card = dynamic(0xFFFFFF, 0x1A1C21)
+    static let card = dynamic(0xFFFFFF, 0x121826)
     /// 카드 테두리
-    static let border = dynamic(0xE4DFD3, 0x2A2D35)
+    static let border = dynamic(0xE4DFD3, 0x222B3B)
     /// 본문 글자
     static let ink = dynamic(0x16181D, 0xFBF9F4)
     /// 보조 글자
-    static let secondary = dynamic(0x5F6470, 0xA4A8B2)
+    static let secondary = dynamic(0x5F6470, 0x8E98AA)
     /// 강조색 글자 (흰 바탕 대비 확보용 진한 민트)
-    static let accentText = dynamic(0x0B7D5C, 0x3DD9A4)
+    static let accentText = dynamic(0x0B7D5C, 0x38C9A0)
     /// 강조색 채움
     static let accent = Color(UIColor(hex: 0x12B886))
     /// 강조색 옅은 바탕
-    static let accentSoft = dynamic(0xE8F7F1, 0x12302A)
-    static let accentSoftText = dynamic(0x0B5A43, 0x9BEBCF)
+    static let accentSoft = dynamic(0xE8F7F1, 0x0E2420)
+    static let accentSoftText = dynamic(0x0B5A43, 0x8FDCC2)
 
     /// 시계 카드 (밝은 모드에서도 잉크)
     static let clockCard = Color(UIColor(hex: 0x16181D))
