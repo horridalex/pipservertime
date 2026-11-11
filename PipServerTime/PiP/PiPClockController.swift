@@ -6,12 +6,15 @@ import Combine
 
 /// 시계를 AVSampleBufferDisplayLayer 에 그려서 PiP(화면 속 화면)로 띄웁니다.
 /// iOS 15+ 의 `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:)` 사용.
+///
+/// PiP 창의 ◀◀ / ▶▶ 버튼은 '시계 미세 조정'으로 씁니다 (설정의 단위만큼 늦추기/앞당기기).
 @MainActor
 final class PiPClockController: NSObject, ObservableObject {
     @Published private(set) var isPossible = false
     @Published private(set) var isActive = false
-    @Published var showTenths = true { didSet { loop.showTenths = showTenths } }
-    @Published var showHost = false { didSet { loop.showHost = showHost } }
+
+    /// PiP 앞/뒤 버튼을 눌렀을 때 (true = 앞당기기)
+    var onSkip: ((Bool) -> Void)?
 
     /// 앱 화면 안의 미리보기와 PiP 원본을 겸하는 뷰 (PiP 를 쓰려면 레이어가 화면에 붙어 있어야 함)
     let displayView = SampleBufferView()
@@ -20,7 +23,7 @@ final class PiPClockController: NSObject, ObservableObject {
     private var pipController: AVPictureInPictureController?
     private var observations: [NSKeyValueObservation] = []
 
-    init(clock: OffsetClock) {
+    init(clock: DisplayClock) {
         loop = ClockFrameLoop(clock: clock, layer: displayView.sampleLayer)
         super.init()
         displayView.sampleLayer.videoGravity = .resizeAspect
@@ -37,8 +40,8 @@ final class PiPClockController: NSObject, ObservableObject {
         pip.delegate = self
         // 앱을 홈으로 내리면 자동으로 PiP 시작
         pip.canStartPictureInPictureAutomaticallyFromInline = true
-        // 실시간 시계이므로 되감기/빨리감기 UI 숨김
-        pip.requiresLinearPlayback = true
+        // 앞/뒤 버튼을 미세 조정용으로 쓰기 위해 표시
+        pip.requiresLinearPlayback = false
         pipController = pip
 
         observations.append(pip.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] p, _ in
@@ -60,32 +63,23 @@ final class PiPClockController: NSObject, ObservableObject {
             pip.startPictureInPicture()
         }
     }
+
+    fileprivate nonisolated var playbackTime: CMTime { loop.currentTime }
 }
 
 /// 백그라운드(PiP 중)에도 돌아가야 하므로 CADisplayLink 대신 GCD 타이머로 프레임을 공급합니다.
-/// 표시 문자열이 바뀔 때(0.1초 또는 1초마다)만 새 프레임을 그립니다.
+/// 표시 문자열이 바뀔 때만 새 프레임을 그리고, 초가 바뀔 때 카운트다운 소리를 냅니다.
 final class ClockFrameLoop: @unchecked Sendable {
-    private let clock: OffsetClock
+    private let clock: DisplayClock
     private let layer: AVSampleBufferDisplayLayer
     private let renderer = ClockFrameRenderer()
     private let queue = DispatchQueue(label: "pip.clock.render", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var lastKey = ""
-    private var timebase: CMTimebase?
+    private var lastSecond: Double = 0
+    private let timebase: CMTimebase?
 
-    private let lock = NSLock()
-    private var _showTenths = true
-    private var _showHost = false
-    var showTenths: Bool {
-        get { lock.lock(); defer { lock.unlock() }; return _showTenths }
-        set { lock.lock(); _showTenths = newValue; lock.unlock() }
-    }
-    var showHost: Bool {
-        get { lock.lock(); defer { lock.unlock() }; return _showHost }
-        set { lock.lock(); _showHost = newValue; lock.unlock() }
-    }
-
-    init(clock: OffsetClock, layer: AVSampleBufferDisplayLayer) {
+    init(clock: DisplayClock, layer: AVSampleBufferDisplayLayer) {
         self.clock = clock
         self.layer = layer
         var tb: CMTimebase?
@@ -93,16 +87,21 @@ final class ClockFrameLoop: @unchecked Sendable {
                                         sourceClock: CMClockGetHostTimeClock(),
                                         timebaseOut: &tb)
         if let tb {
-            CMTimebaseSetTime(tb, time: .zero)
+            // PiP 진행 막대 가운데쯤에서 시작하도록 12시간 지점으로
+            CMTimebaseSetTime(tb, time: CMTime(seconds: 43_200, preferredTimescale: 600))
             CMTimebaseSetRate(tb, rate: 1)
             layer.controlTimebase = tb
-            timebase = tb
         }
+        timebase = tb
+    }
+
+    var currentTime: CMTime {
+        timebase.map { CMTimebaseGetTime($0) } ?? CMClockGetTime(CMClockGetHostTimeClock())
     }
 
     func start() {
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
-        // 5ms 간격으로 확인 → 0.1초 자릿수가 바뀌는 순간과의 지연이 최대 ~5ms
+        // 5ms 간격 확인 → 표시 자릿수가 바뀌는 순간과의 지연이 최대 ~5ms
         t.schedule(deadline: .now(), repeating: .milliseconds(5), leeway: .milliseconds(1))
         t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
@@ -110,17 +109,62 @@ final class ClockFrameLoop: @unchecked Sendable {
     }
 
     private func tick() {
-        let tenths = showTenths
-        let subtitle = showHost ? clock.label : nil
-        let text = ClockFrameRenderer.text(for: clock.now(), tenths: tenths)
-        let key = text + "|" + (subtitle ?? "")
+        let cfg = clock.config
+        let now = Date().addingTimeInterval(cfg.offset)
+        let t = now.timeIntervalSince1970
+        let second = floor(t)
+
+        // 카운트다운 소리
+        if second != lastSecond {
+            if lastSecond != 0 { beepIfNeeded(second: second, cfg: cfg) }
+            lastSecond = second
+        }
+
+        let text = ClockFormat.full(now, digits: cfg.digits, showDate: cfg.showDate)
+
+        // 아래 줄: 사이트 이름 / 일정 카운트다운
+        var parts: [String] = []
+        if cfg.showLabel { parts.append(cfg.label) }
+        var eventSoon = false
+        if let e = cfg.nextEvent {
+            let remain = e.date.timeIntervalSince(now)
+            if remain > -60 && remain < 86_400 {
+                parts.append("\(e.name) \(remain > 0 ? ClockFormat.countdown(remain) : "시작")")
+                eventSoon = remain > 0 && remain <= DisplayClock.redWindow
+            }
+        }
+        let subtitle = parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
+
+        // 정각 직전 빨간 표시
+        let secOfMinute = t.truncatingRemainder(dividingBy: 60)
+        let highlight = cfg.redBeforeMinute && (secOfMinute >= 60 - DisplayClock.redWindow || eventSoon)
+
+        let key = text + "|" + (subtitle ?? "") + (highlight ? "!" : "")
         guard key != lastKey else { return }
         lastKey = key
 
         if layer.status == .failed { layer.flush() }
-        let pts = timebase.map { CMTimebaseGetTime($0) } ?? CMClockGetTime(CMClockGetHostTimeClock())
-        if let sb = renderer.makeSampleBuffer(text: text, subtitle: subtitle, pts: pts) {
+        if let sb = renderer.makeSampleBuffer(text: text, subtitle: subtitle, highlight: highlight, pts: currentTime) {
             layer.enqueue(sb)
+        }
+    }
+
+    /// 정각 3초 전부터 짧게, 정각에 길게
+    private func beepIfNeeded(second: Double, cfg: DisplayConfig) {
+        var target: Double?
+        if let e = cfg.nextEvent, cfg.beepMode != .off {
+            let ev = floor(e.date.timeIntervalSince1970)
+            if ev - second >= 0 && ev - second <= 3 { target = ev }
+        }
+        if target == nil, cfg.beepMode == .everyMinute {
+            target = (floor(second / 60) + (second.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1)) * 60
+        }
+        guard let target else { return }
+        let remain = target - second
+        if remain == 0 {
+            BeepPlayer.shared.playLong()
+        } else if remain >= 1 && remain <= 3 {
+            BeepPlayer.shared.playShort()
         }
     }
 
@@ -133,8 +177,10 @@ extension PiPClockController: AVPictureInPictureSampleBufferPlaybackDelegate {
 
     nonisolated func pictureInPictureControllerTimeRangeForPlayback(
         _ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
-        // 라이브 콘텐츠로 표시
-        CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
+        // 앞/뒤 버튼이 항상 눌릴 수 있도록 현재 위치 앞뒤로 넉넉한 구간
+        let now = playbackTime
+        return CMTimeRange(start: CMTimeSubtract(now, CMTime(seconds: 3600, preferredTimescale: 600)),
+                           duration: CMTime(seconds: 7200, preferredTimescale: 600))
     }
 
     nonisolated func pictureInPictureControllerIsPlaybackPaused(
@@ -143,10 +189,15 @@ extension PiPClockController: AVPictureInPictureSampleBufferPlaybackDelegate {
     nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
                                                 didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
 
+    /// ◀◀ = 늦추기, ▶▶ = 앞당기기
     nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
                                                 skipByInterval skipInterval: CMTime,
                                                 completion completionHandler: @escaping () -> Void) {
-        completionHandler()
+        let forward = CMTimeGetSeconds(skipInterval) > 0
+        Task { @MainActor in
+            self.onSkip?(forward)
+            completionHandler()
+        }
     }
 }
 

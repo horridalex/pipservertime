@@ -4,6 +4,7 @@ import AVFoundation
 @main
 struct PipServerTimeApp: App {
     @StateObject private var store = ClockStore()
+    @StateObject private var network = NetworkMonitor()
 
     init() {
         // PiP 를 쓰려면 재생(playback) 오디오 세션이 활성화되어 있어야 합니다.
@@ -15,9 +16,26 @@ struct PipServerTimeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environmentObject(store)
-                .preferredColorScheme(.dark)
+                .environmentObject(network)
+        }
+    }
+}
+
+struct RootView: View {
+    @EnvironmentObject private var store: ClockStore
+
+    var body: some View {
+        ContentView()
+            .preferredColorScheme(scheme)
+    }
+
+    private var scheme: ColorScheme? {
+        switch store.colorMode {
+        case .system: return nil
+        case .dark: return .dark
+        case .light: return .light
         }
     }
 }

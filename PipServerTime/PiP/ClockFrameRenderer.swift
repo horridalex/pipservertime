@@ -24,22 +24,7 @@ final class ClockFrameRenderer {
         CVPixelBufferPoolCreate(nil, nil, attrs as CFDictionary, &pool)
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "E  yyyy. M. d., HH:mm:ss"
-        return f
-    }()
-
-    /// 화면에 표시할 문자열. 예) "수  2026. 11. 11., 19:16:00.9"
-    static func text(for date: Date, tenths: Bool) -> String {
-        let base = dateFormatter.string(from: date)
-        guard tenths else { return base }
-        let frac = date.timeIntervalSince1970 - floor(date.timeIntervalSince1970)
-        return base + "." + String(min(9, Int(frac * 10)))
-    }
-
-    func makeSampleBuffer(text: String, subtitle: String?, pts: CMTime) -> CMSampleBuffer? {
+    func makeSampleBuffer(text: String, subtitle: String?, highlight: Bool, pts: CMTime) -> CMSampleBuffer? {
         guard let pool else { return nil }
         var pb: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)
@@ -65,7 +50,7 @@ final class ClockFrameRenderer {
         let mainHeight = subtitle == nil ? size.height : size.height * 0.75
         drawCentered(text,
                      font: UIFont.monospacedDigitSystemFont(ofSize: mainHeight * 0.55, weight: .bold),
-                     color: UIColor(white: 0.82, alpha: 1),
+                     color: highlight ? UIColor(red: 1, green: 0.3, blue: 0.3, alpha: 1) : UIColor(white: 0.85, alpha: 1),
                      in: CGRect(x: 0, y: size.height - mainHeight, width: size.width, height: mainHeight),
                      ctx: ctx)
         if let subtitle {
