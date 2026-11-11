@@ -301,7 +301,6 @@ struct ContentView: View {
                 .buttonStyle(CapsuleButtonStyle(filled: false))
             }
             PiPButton(pip: store.pip)
-                .layoutPriority(1)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -320,7 +319,7 @@ struct PiPButton: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: pip.isActive ? "pip.exit" : "pip.enter")
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.primaryButtonGlyph)
                 Text(pip.isActive ? "팝업 닫기" : "팝업 타이머")
             }
         }

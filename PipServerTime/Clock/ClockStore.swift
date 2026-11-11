@@ -174,7 +174,7 @@ final class ClockStore: ObservableObject {
             guard let self else { return }
             self.pipAdjustMs += forward ? self.pipStepMs : -self.pipStepMs
         }
-        // PiP 가 (버튼이든 홈으로 나가서든) 시작될 때마다 자동 닫기 시각 적용
+        // PiP 가 시작될 때마다 자동 닫기 시각 적용
         pip.autoCloseProvider = { [weak self] in self?.nextAutoCloseDate() }
         pushConfig()
         startEventTimer()

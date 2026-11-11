@@ -32,6 +32,11 @@ enum Theme {
     static let clockDim = Color(UIColor(hex: 0xB9BCC4))
     static let clockPill = Color(UIColor(hex: 0x2A2D35))
 
+    /// 주 버튼 (라이트: 잉크 바탕 / 다크: 민트 바탕)
+    static let primaryButton = dynamic(0x16181D, 0x12B886)
+    static let primaryButtonText = dynamic(0xFBF9F4, 0x16181D)
+    static let primaryButtonGlyph = dynamic(0x12B886, 0x16181D)
+
     static let warning = Color(UIColor(hex: 0xE8590C))
     static let alert = Color(UIColor(hex: 0xFA5252))
 }
@@ -60,9 +65,12 @@ struct CapsuleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .foregroundStyle(filled ? Theme.clockText : Theme.ink)
-            .background(Capsule().fill(filled ? Theme.clockCard : Theme.card))
+            .foregroundStyle(filled ? Theme.primaryButtonText : Theme.ink)
+            .background(Capsule().fill(filled ? Theme.primaryButton : Theme.card))
             .overlay(Capsule().stroke(filled ? Color.clear : Theme.border))
             .opacity(configuration.isPressed ? 0.75 : 1)
     }

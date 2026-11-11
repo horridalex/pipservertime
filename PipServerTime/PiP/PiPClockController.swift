@@ -43,8 +43,8 @@ final class PiPClockController: NSObject, ObservableObject {
                                                                 playbackDelegate: self)
         let pip = AVPictureInPictureController(contentSource: source)
         pip.delegate = self
-        // 앱을 홈으로 내리면 자동으로 PiP 시작
-        pip.canStartPictureInPictureAutomaticallyFromInline = true
+        // 홈으로 나가도 자동으로 켜지지 않음 — '팝업 타이머' 버튼으로만 시작
+        pip.canStartPictureInPictureAutomaticallyFromInline = false
         // 앞/뒤 버튼을 미세 조정용으로 쓰기 위해 표시
         pip.requiresLinearPlayback = false
         pipController = pip
