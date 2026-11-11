@@ -5,6 +5,8 @@ struct ContentView: View {
     @EnvironmentObject private var network: NetworkMonitor
     @State private var showSitePicker = false
     @State private var showFocus = false
+    @AppStorage("didShowOnboarding") private var didShowOnboarding = false
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +23,13 @@ struct ContentView: View {
                     if !store.isSyncing, let lead = store.result?.recommendedLead {
                         leadHint(lead)
                     }
+                    if !network.isConnected && !store.isSyncing {
+                        Label("인터넷에 연결되어 있지 않아요. 연결되면 측정할 수 있어요.", systemImage: "wifi.slash")
+                            .font(.footnote).foregroundStyle(Theme.warning)
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.warning.opacity(0.12)))
+                    }
                     if let err = store.lastError {
                         Text(err).font(.footnote).foregroundStyle(Theme.warning)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,6 +43,13 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSitePicker) { SitePickerView() }
             .fullScreenCover(isPresented: $showFocus) { FocusClockView() }
+            .sheet(isPresented: $showOnboarding) { OnboardingView() }
+            .onAppear {
+                if !didShowOnboarding {
+                    didShowOnboarding = true
+                    showOnboarding = true
+                }
+            }
         }
     }
 
@@ -372,6 +388,8 @@ struct ContentView: View {
                     Label(store.result == nil ? "동기화" : "다시 측정", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(CapsuleButtonStyle(filled: false))
+                .disabled(!network.isConnected)
+                .opacity(network.isConnected ? 1 : 0.5)
             }
             PiPButton(pip: store.pip, ready: store.result != nil)
         }

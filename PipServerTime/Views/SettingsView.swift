@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var store: ClockStore
+    @State private var showOnboarding = false
 
     private let digitOptions: [(Int, String)] = [(0, "1초"), (1, "0.1초"), (2, "0.01초"), (3, "0.001초")]
 
@@ -64,7 +65,23 @@ struct SettingsView: View {
                 RowDivider()
                 ToggleRow(title: "PiP 에 사이트 이름 표시", isOn: $store.showHostInPiP)
             }
+
+            SectionHeader(text: "정보")
+            SettingsCard {
+                Button { showOnboarding = true } label: {
+                    RowLabel(title: "사용법") {
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                RowDivider()
+                RowLabel(title: "버전") {
+                    Text(AppInfo.versionText).font(.body.monospacedDigit()).foregroundStyle(Theme.secondary)
+                }
+                CardNote(text: "측정 방식: 사이트 서버 응답의 Date 헤더(1초 단위)를 여러 번 받아, 초가 바뀌는 경계를 좁혀서 서버 시계와 내 폰의 차이를 밀리초 단위로 계산해요. 응답이 늦게 온 샘플과 다른 샘플과 맞지 않는 값은 빼요. 오차는 대략 네트워크 왕복 시간의 절반이에요.")
+            }
         }
+        .sheet(isPresented: $showOnboarding) { OnboardingView() }
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.large)
     }

@@ -62,7 +62,7 @@ enum ClockFormat {
         let t = date.timeIntervalSince1970
         let frac = t - floor(t)
         let scale = pow(10, Double(digits))
-        let v = min(Int(scale) - 1, Int(frac * scale))
+        let v = min(Int(scale) - 1, Int(frac * scale + 1e-3))
         return base + "." + String(format: "%0\(digits)d", v)
     }
 

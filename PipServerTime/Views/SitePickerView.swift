@@ -6,6 +6,8 @@ struct SitePickerView: View {
     @State private var typed = ""
     @State private var showSave = false
     @State private var saveName = ""
+    @State private var renaming: Preset?
+    @State private var renameText = ""
 
     var body: some View {
         NavigationStack {
@@ -52,11 +54,23 @@ struct SitePickerView: View {
                             if p.id != store.customPresets.first?.id { RowDivider() }
                             row(p)
                                 .contextMenu {
-                                    Button("삭제", role: .destructive) { store.deletePreset(p) }
+                                    Button {
+                                        renameText = p.name
+                                        renaming = p
+                                    } label: { Label("이름 바꾸기", systemImage: "pencil") }
+                                    if p.id != store.customPresets.first?.id {
+                                        Button { store.movePreset(p, by: -1) } label: { Label("위로", systemImage: "arrow.up") }
+                                    }
+                                    if p.id != store.customPresets.last?.id {
+                                        Button { store.movePreset(p, by: 1) } label: { Label("아래로", systemImage: "arrow.down") }
+                                    }
+                                    Button(role: .destructive) { store.deletePreset(p) } label: {
+                                        Label("삭제", systemImage: "trash")
+                                    }
                                 }
                         }
                     }
-                    Text("길게 눌러 삭제할 수 있어요.")
+                    Text("길게 눌러 이름 바꾸기·순서 바꾸기·삭제를 할 수 있어요.")
                         .font(.caption).foregroundStyle(Theme.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                 }
@@ -78,6 +92,14 @@ struct SitePickerView: View {
                 }
             }
             .onAppear { typed = store.urlText }
+            .alert("이름 바꾸기", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("이름", text: $renameText)
+                Button("저장") {
+                    if let p = renaming { store.renamePreset(p, to: renameText) }
+                    renaming = nil
+                }
+                Button("취소", role: .cancel) { renaming = nil }
+            }
             .alert("내 사이트로 저장", isPresented: $showSave) {
                 TextField("이름", text: $saveName)
                 Button("저장") { store.saveCurrentAsPreset(name: saveName) }

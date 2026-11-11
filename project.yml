@@ -13,7 +13,9 @@ targets:
   PipServerTime:
     type: application
     platform: iOS
-    scheme: {}
+    scheme:
+      testTargets:
+        - PipServerTimeTests
     sources:
       - PipServerTime
     settings:
@@ -44,3 +46,15 @@ targets:
         # 사용자가 임의의 사이트(http 포함)를 넣을 수 있도록 허용
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+
+  PipServerTimeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - PipServerTimeTests
+    dependencies:
+      - target: PipServerTime
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.pipservertime.tests

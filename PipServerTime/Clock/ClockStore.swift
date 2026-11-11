@@ -228,6 +228,21 @@ final class ClockStore: ObservableObject {
         customPresets.removeAll { $0.url == preset.url }
     }
 
+    func renamePreset(_ preset: Preset, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let i = customPresets.firstIndex(where: { $0.url == preset.url }) else { return }
+        customPresets[i].name = trimmed
+        if urlText == preset.url { siteName = trimmed }
+    }
+
+    /// 저장한 사이트를 한 칸 위(-1)/아래(+1)로
+    func movePreset(_ preset: Preset, by delta: Int) {
+        guard let i = customPresets.firstIndex(where: { $0.url == preset.url }) else { return }
+        let j = i + delta
+        guard customPresets.indices.contains(j) else { return }
+        customPresets.swapAt(i, j)
+    }
+
     // MARK: - 측정
 
     func sync() {
@@ -284,12 +299,36 @@ final class ClockStore: ObservableObject {
             return
         } catch {
             guard syncToken == token, !Task.isCancelled else { return }
-            if let urlError = error as? URLError {
-                lastError = "측정 실패: \(urlError.localizedDescription)"
-            } else {
-                lastError = "측정 실패: \(error.localizedDescription)"
+            lastError = Self.friendlyMessage(for: error, host: target.host ?? text)
+        }
+    }
+
+    /// 측정 실패 이유를 쉬운 말로
+    nonisolated static func friendlyMessage(for error: Error, host: String) -> String {
+        if let e = error as? DirectServerTimeSource.DirectError {
+            switch e {
+            case .noDateHeader: return "\(host) 은(는) 서버 시각을 알려주지 않아 측정할 수 없어요. 다른 주소(예매창 주소 등)로 시도해 보세요."
+            case .inconsistent: return "\(host) 의 응답 시각이 일정하지 않아 측정하지 못했어요. 잠시 후 다시 시도해 보세요."
             }
         }
+        if let e = error as? URLError {
+            switch e.code {
+            case .notConnectedToInternet, .dataNotAllowed:
+                return "인터넷에 연결되어 있지 않아요. 연결을 확인하고 다시 측정해 주세요."
+            case .timedOut:
+                return "\(host) 응답이 너무 늦어요. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요."
+            case .cannotFindHost, .dnsLookupFailed:
+                return "\(host) 주소를 찾을 수 없어요. 주소를 다시 확인해 주세요."
+            case .cannotConnectToHost, .networkConnectionLost:
+                return "\(host) 에 연결하지 못했어요. 잠시 후 다시 시도해 주세요."
+            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+                 .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
+                return "\(host) 와 보안 연결을 맺지 못했어요. 주소가 맞는지 확인해 주세요."
+            default:
+                return "측정하지 못했어요 (\(e.code.rawValue)). 잠시 후 다시 시도해 주세요."
+            }
+        }
+        return "측정하지 못했어요: \(error.localizedDescription)"
     }
 
     private func apply(_ r: SyncResult, url: String) {
