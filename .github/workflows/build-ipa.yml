@@ -1,0 +1,56 @@
+name: Build IPA
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          xcodebuild -project PipServerTime.xcodeproj \
+            -scheme PipServerTime \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/PipServerTime.app Payload/
+          zip -qry PipServerTime.ipa Payload
+          ls -la PipServerTime.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PipServerTime-ipa
+          path: PipServerTime.ipa
+
+      # 아이폰에서 바로 받을 수 있도록 "latest" 릴리스에도 올림
+      - name: Publish to "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest PipServerTime.ipa \
+            --title "최신 빌드 (${GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" \
+            --notes "서명되지 않은 IPA입니다. AltStore / SideStore / Sideloadly 로 설치하세요." \
+            --prerelease --target "$GITHUB_SHA"

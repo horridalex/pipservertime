@@ -13,6 +13,7 @@ targets:
   PipServerTime:
     type: application
     platform: iOS
+    scheme: {}
     sources:
       - PipServerTime
     settings:
