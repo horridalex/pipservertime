@@ -1,8 +1,7 @@
 name: Build IPA
 
+# 요청할 때만 수동 실행 (Actions 탭의 Run workflow 버튼 또는 API)
 on:
-  push:
-    branches: ['**']
   workflow_dispatch:
 
 permissions:
