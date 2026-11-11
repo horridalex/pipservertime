@@ -65,6 +65,8 @@ struct ContentView: View {
                         LabeledContent("기기 대비", value: formatOffset(r.offset))
                         if let acc = r.accuracy {
                             LabeledContent("추정 오차", value: String(format: "±%.0f ms", acc * 1000))
+                        } else if r.source == .navyism {
+                            LabeledContent("기준", value: "네이비즘 계산식 그대로")
                         }
                         LabeledContent("동기화 시각", value: r.syncedAt.formatted(date: .omitted, time: .standard))
                     } else {
