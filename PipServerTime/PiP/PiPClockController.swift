@@ -80,8 +80,8 @@ final class PiPClockController: NSObject, ObservableObject {
 
     /// 자동 닫기.
     /// 앱이 백그라운드에 있으면 iOS 가 stopPictureInPicture() 를 무시하는 경우가 있어 단계적으로 시도:
-    ///  0) 일반 종료 요청
-    ///  1) 0.3초 뒤에도 떠 있으면 PiP 의 콘텐츠 소스를 떼어냄
+    ///  0) 앱이 앞에 있으면 일반 종료 요청, 백그라운드면 바로 콘텐츠 소스를 떼어냄
+    ///  1) 0.3초 뒤에도 떠 있으면 콘텐츠 소스를 떼어냄
     ///  2) 그래도 떠 있으면 PiP 컨트롤러 자체를 해제 (다음 사용을 위해 잠시 뒤 새로 만듦)
     private func stopForAutoClose(step: Int = 0) {
         guard let pip = pipController, pip.isPictureInPictureActive else {
@@ -95,7 +95,12 @@ final class PiPClockController: NSObject, ObservableObject {
         }
         switch step {
         case 0:
-            pip.stopPictureInPicture()
+            if UIApplication.shared.applicationState == .active {
+                pip.stopPictureInPicture()
+            } else {
+                // 백그라운드에선 종료 요청이 무시되므로 기다리지 않고 바로 콘텐츠 소스를 떼어냄
+                pip.contentSource = nil
+            }
         case 1:
             pip.contentSource = nil
         default:
