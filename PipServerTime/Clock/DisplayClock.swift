@@ -17,6 +17,9 @@ struct DisplayConfig: Equatable {
     var nextEvent: ScheduledEvent?
     /// 이 서버시각(보정 제외)이 되면 PiP 자동으로 닫기
     var autoCloseAt: Date?
+    var style: PiPStyle = .standard
+    /// "오차 ±57ms" (기본 16:9 / 정사각형에 표시)
+    var accuracyText: String?
 }
 
 final class DisplayClock: @unchecked Sendable {
@@ -61,6 +64,11 @@ enum ClockFormat {
         let scale = pow(10, Double(digits))
         let v = min(Int(scale) - 1, Int(frac * scale))
         return base + "." + String(format: "%0\(digits)d", v)
+    }
+
+    /// "수  2026. 11. 11."
+    static func dateOnly(_ date: Date) -> String {
+        dateFormatter.string(from: date).trimmingCharacters(in: CharacterSet(charactersIn: ", "))
     }
 
     /// "수  2026. 11. 11., 20:49:39.8"

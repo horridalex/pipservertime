@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject private var store: ClockStore
     @EnvironmentObject private var network: NetworkMonitor
     @State private var showSitePicker = false
+    @State private var showFocus = false
 
     var body: some View {
         NavigationStack {
@@ -34,6 +35,7 @@ struct ContentView: View {
             .navigationTitle("서버시간")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showSitePicker) { SitePickerView() }
+            .fullScreenCover(isPresented: $showFocus) { FocusClockView() }
         }
         .task { if store.result == nil && !store.isSyncing { store.sync() } }
     }
@@ -72,14 +74,22 @@ struct ContentView: View {
                 Spacer()
                 if store.isSyncing {
                     Badge(text: "측정 중")
-                } else if abs(store.totalCorrection) >= 0.0005 {
-                    Badge(text: "보정 " + Fmt.signedSec(store.totalCorrection), tint: .secondary)
+                } else {
+                    if abs(store.totalCorrection) >= 0.0005 {
+                        Badge(text: "보정 " + Fmt.signedSec(store.totalCorrection), tint: .secondary)
+                    }
+                    Button { showFocus = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.title3.weight(.semibold))
+                    }
+                    .accessibilityLabel("타이머 집중 화면")
                 }
             }
 
             // PiP 원본 (PiP 를 켜려면 화면에 있어야 함)
             ClockPreview(pip: store.pip)
-                .aspectRatio(6, contentMode: .fit)
+                .aspectRatio(store.pipStyle.aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 180)
 
             if store.isSyncing {
                 measuringBody

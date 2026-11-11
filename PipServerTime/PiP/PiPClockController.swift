@@ -86,7 +86,8 @@ final class PiPClockController: NSObject, ObservableObject {
 final class ClockFrameLoop: @unchecked Sendable {
     private let clock: DisplayClock
     private let layer: AVSampleBufferDisplayLayer
-    private let renderer = ClockFrameRenderer()
+    private var renderer = ClockFrameRenderer(size: PiPStyle.standard.pixelSize)
+    private var currentStyle: PiPStyle = .standard
     private let queue = DispatchQueue(label: "pip.clock.render", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var lastKey = ""
@@ -146,8 +147,6 @@ final class ClockFrameLoop: @unchecked Sendable {
             lastSecond = second
         }
 
-        let text = ClockFormat.full(now, digits: cfg.digits, showDate: cfg.showDate)
-
         // 아래 줄: 사이트 이름 / 일정 카운트다운
         var parts: [String] = []
         if cfg.showLabel { parts.append(cfg.label) }
@@ -165,13 +164,48 @@ final class ClockFrameLoop: @unchecked Sendable {
         let secOfMinute = t.truncatingRemainder(dividingBy: 60)
         let highlight = cfg.redBeforeMinute && (secOfMinute >= 60 - DisplayClock.redWindow || eventSoon)
 
-        let key = text + "|" + (subtitle ?? "") + (highlight ? "!" : "")
+        let lines = Self.layout(style: cfg.style, now: now, cfg: cfg, subtitle: subtitle, highlight: highlight)
+        let key = cfg.style.rawValue + "|" + lines.map(\.text).joined(separator: "|") + (highlight ? "!" : "")
         guard key != lastKey else { return }
         lastKey = key
 
+        // PiP 크기가 바뀌면 새 크기의 버퍼로 (PiP 창 비율이 따라 바뀜)
+        if cfg.style != currentStyle {
+            currentStyle = cfg.style
+            renderer = ClockFrameRenderer(size: cfg.style.pixelSize)
+            layer.flush()
+        }
+
         if layer.status == .failed { layer.flush() }
-        if let sb = renderer.makeSampleBuffer(text: text, subtitle: subtitle, highlight: highlight, pts: currentTime) {
+        if let sb = renderer.makeSampleBuffer(lines: lines, pts: currentTime) {
             layer.enqueue(sb)
+        }
+    }
+
+    /// PiP 크기별 화면 구성
+    static func layout(style: PiPStyle, now: Date, cfg: DisplayConfig,
+                       subtitle: String?, highlight: Bool) -> [RenderLine] {
+        let main = highlight ? UIColor(red: 1, green: 0.3, blue: 0.3, alpha: 1) : UIColor(white: 0.9, alpha: 1)
+        let dim = UIColor(white: 0.55, alpha: 1)
+        let time = ClockFormat.time(now, digits: cfg.digits)
+        let full = ClockFormat.full(now, digits: cfg.digits, showDate: cfg.showDate)
+        let info = [cfg.accuracyText, subtitle].compactMap { $0 }.joined(separator: "  ·  ")
+
+        switch style {
+        case .standard, .square:
+            var lines: [RenderLine] = []
+            if cfg.showDate { lines.append(RenderLine(text: ClockFormat.dateOnly(now), share: 1, color: dim, weight: .semibold)) }
+            lines.append(RenderLine(text: time, share: style == .square ? 2.2 : 3.2, color: main))
+            if !info.isEmpty { lines.append(RenderLine(text: info, share: 0.9, color: dim, weight: .medium)) }
+            return lines
+        case .barL:
+            var lines = [RenderLine(text: full, share: 3, color: main)]
+            if let subtitle { lines.append(RenderLine(text: subtitle, share: 1, color: dim, weight: .medium)) }
+            return lines
+        case .barM:
+            return [RenderLine(text: full, share: 1, color: main)]
+        case .thin, .ultraSlim:
+            return [RenderLine(text: time, share: 1, color: main)]
         }
     }
 

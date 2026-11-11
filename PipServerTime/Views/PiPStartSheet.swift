@@ -24,6 +24,15 @@ struct PiPStartSheet: View {
 
                     Card {
                         Text("사라지는 시각").font(.headline)
+                        Text("숫자를 탭해 직접 입력하거나 아래 휠을 돌리세요 · 예: 14, 53, 55")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            numberField($h, max: 23, unit: "시")
+                            Text(":").font(.title.bold())
+                            numberField($m, max: 59, unit: "분")
+                            Text(":").font(.title.bold())
+                            numberField($s, max: 59, unit: "초")
+                        }
                         HStack(spacing: 0) {
                             wheel($h, 0..<24, "시")
                             wheel($m, 0..<60, "분")
@@ -76,6 +85,23 @@ struct PiPStartSheet: View {
         h = secondOfDay / 3600
         m = (secondOfDay % 3600) / 60
         s = secondOfDay % 60
+    }
+
+    /// 탭해서 숫자 직접 입력 (범위를 넘으면 최댓값으로)
+    private func numberField(_ value: Binding<Int>, max: Int, unit: String) -> some View {
+        TextField(unit, text: Binding(
+            get: { String(format: "%02d", value.wrappedValue) },
+            set: { text in
+                let digits = text.filter(\.isNumber).suffix(2)
+                value.wrappedValue = Swift.min(max, Int(String(digits)) ?? 0)
+            }
+        ))
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.center)
+        .font(.title.monospacedDigit().weight(.semibold))
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.08)))
+        .frame(maxWidth: .infinity)
     }
 
     private func wheel(_ value: Binding<Int>, _ range: Range<Int>, _ unit: String) -> some View {

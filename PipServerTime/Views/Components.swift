@@ -75,8 +75,6 @@ struct ClockPreview: UIViewRepresentable {
             v.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             v.topAnchor.constraint(equalTo: container.topAnchor),
             v.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            // 렌더 크기(1200x200)와 같은 6:1 비율
-            v.heightAnchor.constraint(equalTo: v.widthAnchor, multiplier: 1.0 / 6.0),
         ])
         return container
     }

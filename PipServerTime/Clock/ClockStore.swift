@@ -74,6 +74,10 @@ final class ClockStore: ObservableObject {
         didSet { Self.defaults.set(colorMode.rawValue, forKey: "colorMode") }
     }
 
+    @Published var pipStyle: PiPStyle = PiPStyle(rawValue: UserDefaults.standard.string(forKey: "pipStyle") ?? "") ?? .standard {
+        didSet { Self.defaults.set(pipStyle.rawValue, forKey: "pipStyle"); pushConfig() }
+    }
+
     // MARK: - PiP 자동 닫기
 
     /// 지정한 서버시각에 PiP 자동으로 닫기 (좌석 선택·결제 화면을 가리지 않도록)
@@ -314,7 +318,13 @@ final class ClockStore: ObservableObject {
         let digits = pipDigits, showDate = showDateInPiP, showLabel = showHostInPiP
         let red = redBeforeMinute, beep = beepMode
         let next = nextEvent
+        let style = pipStyle
+        let accText: String? = result.map { r in
+            r.accuracy.map { String(format: "오차 ±%.0fms", $0 * 1000) } ?? "네이비즘 계산값"
+        }
         clock.update {
+            $0.style = style
+            $0.accuracyText = accText
             $0.offset = base + corr
             $0.serverOffset = base
             $0.label = label

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// 서버시간을 어디서 가져올지
 enum SyncSource: String, CaseIterable, Identifiable, Codable {
@@ -108,4 +109,46 @@ struct SyncResult: Equatable {
         let minutes = max(0, t.timeIntervalSince(syncedAt) / 60)
         return a + minutes * Self.driftPerMinute
     }
+}
+
+/// PiP 창 모양. PiP 창 비율은 그리는 버퍼 비율을 따라갑니다.
+enum PiPStyle: String, CaseIterable, Identifiable, Codable {
+    case standard, barL, barM, thin, ultraSlim, square
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard: return "기본 16:9"
+        case .barL: return "긴 막대 L"
+        case .barM: return "긴 막대 M"
+        case .thin: return "얇은 막대"
+        case .ultraSlim: return "초슬림 선형"
+        case .square: return "정사각형"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .standard: return "큰 숫자와 오차 표시를 함께 보여주는 기본 팝업"
+        case .barL: return "가로로 긴 창에 숫자를 크게 배치"
+        case .barM: return "다른 앱 위에 올려두기 쉬운 낮은 막대"
+        case .thin: return "시야를 덜 가리는 초경량 가로형"
+        case .ultraSlim: return "화면 위·아래에 붙여두기 좋은 가장 얇은 형태"
+        case .square: return "짧은 가로폭이 필요할 때 쓰는 컴팩트 정사각형"
+        }
+    }
+
+    /// 렌더 버퍼 크기 (픽셀)
+    var pixelSize: CGSize {
+        switch self {
+        case .standard: return CGSize(width: 1280, height: 720)
+        case .barL: return CGSize(width: 1200, height: 200)
+        case .barM: return CGSize(width: 1200, height: 150)
+        case .thin: return CGSize(width: 1440, height: 120)
+        case .ultraSlim: return CGSize(width: 1600, height: 80)
+        case .square: return CGSize(width: 720, height: 720)
+        }
+    }
+
+    var aspect: CGFloat { pixelSize.width / pixelSize.height }
 }

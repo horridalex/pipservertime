@@ -149,6 +149,15 @@ struct SettingsView: View {
                 Text("0.01초").tag(2)
                 Text("0.001초").tag(3)
             }
+            NavigationLink {
+                PiPSizeView()
+            } label: {
+                HStack {
+                    Text("PiP 크기")
+                    Spacer()
+                    Text(store.pipStyle.title).foregroundStyle(.secondary)
+                }
+            }
             Toggle("PiP 에 날짜 표시", isOn: $store.showDateInPiP)
             Toggle("PiP 에 사이트 이름 표시", isOn: $store.showHostInPiP)
         } header: {

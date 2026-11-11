@@ -31,8 +31,11 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # 집중 화면을 가로로 크게 보기 위해 가로 방향 허용
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # PiP 는 "Audio, AirPlay, and Picture in Picture" 백그라운드 모드가 필요합니다.
         UIBackgroundModes:
           - audio
