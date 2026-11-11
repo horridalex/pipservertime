@@ -77,7 +77,7 @@ struct MeasurementDetailView: View {
 
     private func passTable(_ r: SyncResult) -> some View {
         Card {
-            Text("패스별 결과").font(.headline)
+            Text("패스별 결과 (누적)").font(.headline)
             ForEach(r.passes) { p in
                 HStack {
                     Text("\(p.pass)차").foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
@@ -90,7 +90,7 @@ struct MeasurementDetailView: View {
                 Divider()
             }
             HStack {
-                Text("중앙값").bold()
+                Text("최종").bold()
                 Spacer()
                 Text(String(format: "%+.0fms", r.offset * 1000)).font(.body.monospaced().bold()).foregroundStyle(Theme.accentText)
             }

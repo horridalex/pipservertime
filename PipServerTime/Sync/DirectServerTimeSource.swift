@@ -51,11 +51,11 @@ enum AccuracyPreset: String, CaseIterable, Codable, Identifiable {
 ///  - 여러 샘플의 범위를 겹치면 θ 가 좁혀짐. 응답이 빨리 온(왕복이 짧은) 샘플일수록 범위가 좁아 정확함.
 ///
 /// 한 패스:
-///  1) 샘플 N개를 무작위 간격으로 빠르게 보냄 (서버의 1초 안 여러 위치에 고르게 떨어지도록)
+///  1) 샘플 N개를 0~10ms 무작위 간격으로 빠르게 보냄 (서버의 1초 안 여러 위치에 고르게 떨어지도록)
 ///  2) 왕복이 느린 샘플은 제외 (최소 RTT 의 1.5배 초과)
-///  3) 남은 샘플이 가장 많이 동의하는 구간 → 그 가운데를 '초 경계'로 겨냥한 보정 샘플 B개 추가
-///  4) 패스 결과 = 최종 합의 구간의 중앙
-/// 패스를 여러 번 반복해 중앙값을 최종값으로 쓰고, 패스 간 흔들림을 오차에 더합니다.
+///  3) 경계 보정: 지금까지의 합의 구간을 바탕으로 다음 '초 경계' 앞뒤에 시차를 둔 샘플을
+///     한꺼번에(동시에) 보냄. 넓게 한 번, 좁혀서 한 번. (하나씩 다음 초를 기다리던 방식보다 훨씬 빠름)
+/// 샘플은 패스를 거치며 계속 누적되고, 최종값 = 전체 샘플이 가장 많이 동의하는 구간의 중앙.
 ///
 /// 참고: Cloudflare `/cdn-cgi/trace` 의 `ts=` 값도 검토했지만 소수점 아래가 실제와 0~1초 사이로
 /// 무작위하게 어긋나 밀리초 기준으로 쓸 수 없어 사용하지 않습니다.
@@ -122,8 +122,15 @@ enum DirectServerTimeSource {
 
         // 연결 예열 (DNS/TLS 시간이 측정에 섞이지 않도록) - 통계에는 넣지 않음
         guard try await client.dateSample(url) != nil else { throw DirectError.noDateHeader }
+        // 경계 보정 샘플을 동시에 보낼 연결들도 미리 열어 둠
+        let burstSize = max(1, (level.boundary + 1) / 2)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<burstSize { group.addTask { _ = try? await client.dateSample(url) } }
+            try await group.waitForAll()
+        }
 
         var allSamples: [Sample] = []
+        var bounds: [(Bound, Int)] = []      // 모든 패스의 샘플을 누적 (범위, allSamples 인덱스)
         var passResults: [PassResult] = []
         var nextID = 0
         let passes = max(1, level.passes)
@@ -131,52 +138,59 @@ enum DirectServerTimeSource {
         func report(_ pass: Int) {
             progress(Progress(samples: allSamples, plannedTotal: level.plannedTotal, pass: pass, passes: passes))
         }
+        func add(_ b: Bound, pass: Int, boundary: Bool) {
+            allSamples.append(Sample(id: nextID, pass: pass, rtt: b.rtt, used: true, boundary: boundary))
+            bounds.append((b, allSamples.count - 1))
+            nextID += 1
+            markUsed(&allSamples, bounds)
+        }
+        func usedBounds() -> [Bound] { bounds.filter { allSamples[$0.1].used }.map { $0.0 } }
 
         for pass in 1...passes {
-            var bounds: [(Bound, Int)] = []   // (범위, allSamples 인덱스)
-
-            // 1) 빠른 샘플들
+            // 1) 빠른 샘플들: 0~10ms 무작위 간격 → 서버의 1초 안 여러 위치에 고르게 떨어짐
             for _ in 0..<max(3, level.samples) {
                 try Task.checkCancellation()
-                // 0~30ms 무작위 간격 → 샘플이 서버의 1초 안 여러 위치에 고르게 떨어짐
-                try await Task.sleep(nanoseconds: UInt64.random(in: 0...30_000_000))
-                let b = try await requireSample(client, url)
-                allSamples.append(Sample(id: nextID, pass: pass, rtt: b.rtt, used: true, boundary: false))
-                bounds.append((b, allSamples.count - 1))
-                nextID += 1
-                markUsed(&allSamples, bounds)
+                try await Task.sleep(nanoseconds: UInt64.random(in: 0...10_000_000))
+                add(try await requireSample(client, url), pass: pass, boundary: false)
                 report(pass)
             }
 
-            // 2) 경계 보정 샘플들
-            for i in 0..<max(0, level.boundary) {
+            // 2) 경계 보정: 다음 '초 경계' 앞뒤로 조금씩 시차를 둔 샘플을 한꺼번에 보냄 (2번: 넓게 → 좁게)
+            var remaining = max(0, level.boundary)
+            while remaining > 0 {
                 try Task.checkCancellation()
-                let used = bounds.filter { allSamples[$0.1].used }.map { $0.0 }
+                let n = min(burstSize, remaining)
+                remaining -= n
+                let used = usedBounds()
                 let c = Consensus(used)
                 let guess = c?.mid ?? 0
                 let rtt = median(used.map(\.rtt))
-                // 서버 도착 예상 시각이 다음 정수 초가 되도록 발사. 경계 앞/뒤를 번갈아 살짝 비켜 겨냥.
-                let nudge = (i % 2 == 0 ? 1.0 : -1.0) * min(0.01, (c?.width ?? 1) / 4)
+                let spread = min(0.3, max(0.01, (c?.width ?? 0.3) * 0.8))
                 let now = Date().timeIntervalSince1970
-                let boundary = ceil(now + rtt / 2 + guess + 0.1)
-                let wait = boundary - guess - rtt / 2 + nudge - now
-                if wait > 0 { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
-
-                let b = try await requireSample(client, url)
-                allSamples.append(Sample(id: nextID, pass: pass, rtt: b.rtt, used: true, boundary: true))
-                bounds.append((b, allSamples.count - 1))
-                nextID += 1
-                markUsed(&allSamples, bounds)
+                // 서버 도착 예상 시각이 다음 정수 초가 되는 기기 시각
+                let base = ceil(now + rtt / 2 + guess + 0.05) - guess - rtt / 2
+                let fireTimes = (0..<n).map { k in
+                    n > 1 ? base - spread / 2 + spread * Double(k) / Double(n - 1) : base
+                }
+                let results = try await withThrowingTaskGroup(of: Bound?.self) { group -> [Bound] in
+                    for t in fireTimes {
+                        group.addTask {
+                            let wait = t - Date().timeIntervalSince1970
+                            if wait > 0 { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+                            return try await client.dateSample(url)
+                        }
+                    }
+                    var out: [Bound] = []
+                    for try await b in group { if let b { out.append(b) } }
+                    return out
+                }
+                for b in results { add(b, pass: pass, boundary: true) }
                 report(pass)
             }
 
-            // 3) 패스 결과
-            let used = bounds.filter { allSamples[$0.1].used }.map { $0.0 }
+            // 3) 이 패스까지 누적된 샘플의 합의 구간
+            let used = usedBounds()
             if let c = Consensus(used) {
-                // 합의에 들지 못한 샘플(튀는 값)도 '제외'로 표시
-                for (b, idx) in bounds where allSamples[idx].used {
-                    if !(b.lower <= c.mid && c.mid < b.upper) { allSamples[idx].used = false }
-                }
                 passResults.append(PassResult(pass: pass, rttMin: used.map(\.rtt).min() ?? 0,
                                               offset: c.mid, halfWidth: c.width / 2,
                                               used: c.agreed, total: bounds.count))
@@ -184,16 +198,19 @@ enum DirectServerTimeSource {
             report(pass)
         }
 
-        guard !passResults.isEmpty else { throw DirectError.inconsistent }
+        // 최종: 전체 샘플의 합의 구간. 합의에 들지 못한 샘플(튀는 값)은 '제외'로 표시
+        guard let final = Consensus(usedBounds()) else { throw DirectError.inconsistent }
+        for (b, idx) in bounds where allSamples[idx].used {
+            if !(b.lower <= final.mid && final.mid < b.upper) { allSamples[idx].used = false }
+        }
 
-        let offset = median(passResults.map(\.offset))
-        let spread = passResults.map { abs($0.offset - offset) }.max() ?? 0
-        let accuracy = median(passResults.map(\.halfWidth)) + spread
+        let offset = final.mid
+        let accuracy = final.width / 2
         let usedRTTs = allSamples.filter(\.used).map(\.rtt)
         let usedRatio = Double(usedRTTs.count) / Double(max(1, allSamples.count))
 
         let confidence: SyncConfidence = {
-            if accuracy <= 0.04 && usedRatio >= 0.4 { return .high }
+            if accuracy <= 0.04 && usedRatio >= 0.3 { return .high }
             if accuracy <= 0.1 { return .medium }
             return .low
         }()
@@ -263,11 +280,16 @@ final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         config.urlCache = nil
         config.httpShouldSetCookies = false
-        config.httpMaximumConnectionsPerHost = 1
+        config.httpMaximumConnectionsPerHost = 4   // 경계 보정 샘플 동시 전송
         config.timeoutIntervalForRequest = 10
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
-    private var useHead = true
+    private let lock = NSLock()
+    private var _useHead = true
+    private var useHead: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _useHead }
+        set { lock.lock(); _useHead = newValue; lock.unlock() }
+    }
 
     func invalidate() { session.finishTasksAndInvalidate() }
 
