@@ -48,12 +48,7 @@ struct SettingsView: View {
                         options: BeepMode.allCases.map { ($0, $0.title) })
                 RowDivider()
                 ToggleRow(title: "정각 10초 전 빨간 표시", isOn: $store.redBeforeMinute)
-                RowDivider()
-                ToggleRow(title: "지정한 시각에 PiP 자동으로 닫기",
-                          subtitle: String(format: "서버시간 %02d:%02d:%02d · 팝업 타이머 시작 옵션에서 변경",
-                                           store.autoCloseSecondOfDay / 3600, (store.autoCloseSecondOfDay % 3600) / 60,
-                                           store.autoCloseSecondOfDay % 60),
-                          isOn: $store.autoClosePiP)
+
                 RowDivider()
                 MenuRow(title: "화면 모드", selection: $store.colorMode,
                         options: ColorMode.allCases.map { ($0, $0.title) })
