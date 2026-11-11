@@ -41,6 +41,8 @@ final class PiPClockController: NSObject, ObservableObject {
 
     private func setupPiP() {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
+        // 이전 컨트롤러가 남아 있으면 정리 (중복 생성·관찰 방지)
+        if pipController != nil { teardownPiP() }
         let source = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: displayView.sampleLayer,
                                                                 playbackDelegate: self)
         let pip = AVPictureInPictureController(contentSource: source)
