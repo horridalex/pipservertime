@@ -302,7 +302,9 @@ struct ContentView: View {
                             ProgressView(value: progress(remain))
                                 .tint(remain > 0 && remain < 60 ? Theme.alert : Theme.ink)
                             HStack {
-                                Text(store.autoResyncMinutes > 0 ? "\(store.autoResyncMinutes)분 전 자동 재측정" : "자동 재측정 꺼짐")
+                                Text(store.autoResyncSeconds > 0
+                                     ? "\(ClockStore.autoResyncOptions.first { $0.0 == store.autoResyncSeconds }?.1 ?? "") 자동 재측정"
+                                     : "자동 재측정 꺼짐")
                                     .foregroundStyle(Theme.secondary)
                                 Spacer()
                                 Text(remain > 0 ? ClockFormat.countdown(remain) + " 남음" : "시작됨")

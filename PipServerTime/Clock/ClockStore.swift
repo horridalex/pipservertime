@@ -119,10 +119,13 @@ final class ClockStore: ObservableObject {
             scheduleNotifications()
         }
     }
-    /// 일정 N분 전에 자동 재측정 (0 = 끔)
-    @Published var autoResyncMinutes: Int = UserDefaults.standard.object(forKey: "autoResyncMinutes") as? Int ?? 4 {
-        didSet { Self.defaults.set(autoResyncMinutes, forKey: "autoResyncMinutes") }
+    /// 일정 오픈 N초 전에 한 번 자동 재측정 (0 = 끔)
+    @Published var autoResyncSeconds: Int = UserDefaults.standard.object(forKey: "autoResyncSeconds") as? Int ?? 90 {
+        didSet { Self.defaults.set(autoResyncSeconds, forKey: "autoResyncSeconds") }
     }
+    static let autoResyncOptions: [(Int, String)] = [
+        (0, "끄기"), (60, "1분 전"), (90, "1분 30초 전"), (120, "2분 전"), (180, "3분 전"), (300, "5분 전"),
+    ]
 
     // MARK: - 저장한 사이트
 
@@ -179,10 +182,8 @@ final class ClockStore: ObservableObject {
     /// 진행 중인 측정 식별자 (취소된 이전 측정의 진행 상황이 섞이지 않도록)
     private var syncToken = UUID()
     private var eventTimer: Timer?
-    /// 이미 자동 재측정한 (일정, 단계). 단계 0 = N분 전, 1 = 오픈 직전(1분 30초 전)
-    private var resyncedEventIDs: Set<String> = []
-    /// 오픈 직전 마지막 재측정 시점 (초 전)
-    static let finalResyncLead: TimeInterval = 90
+    /// 이미 자동 재측정한 일정
+    private var resyncedEventIDs: Set<UUID> = []
 
     init() {
         let c = DisplayClock()
@@ -351,7 +352,7 @@ final class ClockStore: ObservableObject {
         guard let i = events.firstIndex(where: { $0.id == e.id }) else { return }
         events[i] = e
         events.sort { $0.date < $1.date }
-        resyncedEventIDs = resyncedEventIDs.filter { !$0.hasPrefix(e.id.uuidString) }
+        resyncedEventIDs.remove(e.id)
     }
 
     func deleteEvent(_ e: ScheduledEvent) {
@@ -389,23 +390,11 @@ final class ClockStore: ObservableObject {
 
     private func checkEvents() {
         pushConfig()
-        guard autoResyncMinutes > 0, !isSyncing, let e = nextEvent else { return }
+        guard autoResyncSeconds > 0, !isSyncing, let e = nextEvent else { return }
         let remain = e.date.timeIntervalSince(clock.now())
-        // 정각 30초 전부터는 측정하지 않음 (측정 중 결과가 바뀌면 혼란)
-        guard remain > 30 else { return }
-        // 1) 설정한 N분 전  2) 오픈 1분 30초 전 한 번 더 (서버 시계가 그 사이 움직이는 경우 대비)
-        let stage: Int
-        if remain <= Self.finalResyncLead {
-            stage = 1
-        } else if remain <= Double(autoResyncMinutes) * 60 {
-            stage = 0
-        } else {
-            return
-        }
-        let key = "\(e.id.uuidString)-\(stage)"
-        guard !resyncedEventIDs.contains(key) else { return }
-        resyncedEventIDs.insert(key)
-        if stage == 1 { resyncedEventIDs.insert("\(e.id.uuidString)-0") }
+        // 설정한 시점에 한 번. 정각 30초 전부터는 측정하지 않음 (측정 중 결과가 바뀌면 혼란)
+        guard remain <= Double(autoResyncSeconds), remain > 30, !resyncedEventIDs.contains(e.id) else { return }
+        resyncedEventIDs.insert(e.id)
         if let u = e.url, !u.isEmpty, u != urlText {
             urlText = u
             // 저장된/기본 사이트면 그 이름을, 아니면 주소의 호스트를 이름으로
