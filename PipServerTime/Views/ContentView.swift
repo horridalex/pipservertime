@@ -11,10 +11,9 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     header
+                    if !store.recentSites.isEmpty { recentRow }
                     clockCard
-                    if store.result != nil && !store.isSyncing {
-                        statTiles
-                    }
+                    if !store.isSyncing { statTiles }
                     scheduleCard
                     if !store.isSyncing, let lead = store.result?.recommendedLead {
                         leadHint(lead)
@@ -33,7 +32,6 @@ struct ContentView: View {
             .sheet(isPresented: $showSitePicker) { SitePickerView() }
             .fullScreenCover(isPresented: $showFocus) { FocusClockView() }
         }
-        .task { if store.result == nil && !store.isSyncing { store.sync() } }
     }
 
     // MARK: - 상단
@@ -54,6 +52,28 @@ struct ContentView: View {
         .padding(.top, 8)
     }
 
+    // MARK: - 최근 동기화
+
+    private var recentRow: some View {
+        HStack(spacing: 8) {
+            Text("최근 동기화").font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(store.recentSites) { p in
+                        Button { store.select(p) } label: {
+                            Text(p.name).font(.subheadline.weight(.bold))
+                                .foregroundStyle(Theme.ink)
+                                .padding(.horizontal, 14).frame(height: 36)
+                                .background(Capsule().fill(Theme.card))
+                                .overlay(Capsule().stroke(Theme.border))
+                        }
+                        .disabled(store.isSyncing)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - 시계 카드 (잉크)
 
     private var clockCard: some View {
@@ -62,7 +82,8 @@ struct ContentView: View {
                 Button { showSitePicker = true } label: {
                     HStack(spacing: 8) {
                         Circle().fill(dotColor).frame(width: 8, height: 8)
-                        Text(store.siteName).font(.subheadline.weight(.bold)).lineLimit(1)
+                        Text(store.result == nil && !store.isSyncing ? "먼저 동기화를 진행해주세요" : store.siteName)
+                            .font(.subheadline.weight(.bold)).lineLimit(1)
                         Image(systemName: "chevron.down").font(.caption.weight(.bold))
                     }
                     .foregroundStyle(Theme.clockText)
@@ -90,6 +111,8 @@ struct ContentView: View {
 
             if store.isSyncing {
                 measuringBody
+            } else if store.result == nil {
+                idleBody
             } else {
                 clockBody
             }
@@ -170,6 +193,18 @@ struct ContentView: View {
         return s >= 60 - DisplayClock.redWindow
     }
 
+    /// 동기화 전
+    private var idleBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("--:--:--.---")
+                .font(.system(size: 56, weight: .heavy).monospacedDigit())
+                .foregroundStyle(Theme.clockCardLine)
+                .minimumScaleFactor(0.4).lineLimit(1)
+            Text("위에서 사이트를 고르고 아래 '동기화'를 누르면 서버시간을 측정합니다.")
+                .font(.footnote).foregroundStyle(Theme.clockDim)
+        }
+    }
+
     private var measuringBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("--:--:--.---")
@@ -199,7 +234,13 @@ struct ContentView: View {
     private var statTiles: some View {
         NavigationLink { MeasurementDetailView() } label: {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                if let r = store.result {
+                if store.result == nil {
+                    HStack(spacing: 8) {
+                        tile("추정 오차", "±—", unit: nil, color: Theme.secondary)
+                        tile("사용 샘플", "—", unit: nil, color: Theme.secondary)
+                        tile("마지막 측정", "—", unit: nil, color: Theme.secondary)
+                    }
+                } else if let r = store.result {
                     HStack(spacing: 8) {
                         tile("추정 오차", r.projectedAccuracy(at: ctx.date).map { String(format: "±%.0f", $0 * 1000) } ?? "—",
                              unit: r.accuracy == nil ? nil : "ms")
@@ -211,6 +252,7 @@ struct ContentView: View {
             }
         }
         .buttonStyle(.plain)
+        .disabled(store.result == nil)
         .accessibilityHint("측정 근거 자세히 보기")
     }
 
@@ -296,11 +338,11 @@ struct ContentView: View {
                     .buttonStyle(CapsuleButtonStyle(filled: false))
             } else {
                 Button { store.sync() } label: {
-                    Label("다시 측정", systemImage: "arrow.triangle.2.circlepath")
+                    Label(store.result == nil ? "동기화" : "다시 측정", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(CapsuleButtonStyle(filled: false))
             }
-            PiPButton(pip: store.pip)
+            PiPButton(pip: store.pip, ready: store.result != nil)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -311,6 +353,8 @@ struct ContentView: View {
 
 struct PiPButton: View {
     @ObservedObject var pip: PiPClockController
+    /// 동기화가 끝나야 켤 수 있음
+    var ready = true
     @State private var showOptions = false
 
     var body: some View {
@@ -324,8 +368,8 @@ struct PiPButton: View {
             }
         }
         .buttonStyle(CapsuleButtonStyle(filled: true))
-        .disabled(!pip.isPossible && !pip.isActive)
-        .opacity(!pip.isPossible && !pip.isActive ? 0.5 : 1)
+        .disabled(!pip.isActive && (!pip.isPossible || !ready))
+        .opacity(!pip.isActive && (!pip.isPossible || !ready) ? 0.45 : 1)
         .sheet(isPresented: $showOptions) { PiPStartSheet() }
     }
 }

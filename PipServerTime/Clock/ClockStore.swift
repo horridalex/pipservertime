@@ -150,6 +150,21 @@ final class ClockStore: ObservableObject {
 
     var presets: [Preset] { customPresets + Self.builtInPresets }
 
+    /// 최근에 동기화한 사이트 (최대 5개, 최근 순)
+    @Published private(set) var recentSites: [Preset] = {
+        guard let data = UserDefaults.standard.data(forKey: "recentSites"),
+              let list = try? JSONDecoder().decode([Preset].self, from: data) else { return [] }
+        return list
+    }() {
+        didSet { Self.defaults.set(try? JSONEncoder().encode(recentSites), forKey: "recentSites") }
+    }
+
+    private func rememberRecent(name: String, url: String) {
+        recentSites.removeAll { $0.url == url }
+        recentSites.insert(Preset(name: name, url: url), at: 0)
+        if recentSites.count > 5 { recentSites.removeLast(recentSites.count - 5) }
+    }
+
     // MARK: - 실행 상태
 
     @Published private(set) var result: SyncResult?
@@ -291,6 +306,7 @@ final class ClockStore: ObservableObject {
 
     private func apply(_ r: SyncResult) {
         result = r
+        rememberRecent(name: r.siteName, url: urlText)
         pushConfig()
         scheduleNotifications()
     }
