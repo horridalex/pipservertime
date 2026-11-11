@@ -232,33 +232,48 @@ struct ContentView: View {
 
     // MARK: - 측정 근거 타일
 
+    /// 측정 근거 카드: 추정 오차 · 사용 샘플 · 마지막 측정 + 자세히
     private var statTiles: some View {
-        NavigationLink { MeasurementDetailView() } label: {
-            TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                if store.result == nil {
-                    HStack(spacing: 8) {
-                        tile("추정 오차", "±—", unit: nil, color: Theme.secondary)
-                        tile("사용 샘플", "—", unit: nil, color: Theme.secondary)
-                        tile("마지막 측정", "—", unit: nil, color: Theme.secondary)
+        Card {
+            HStack {
+                Text("측정 근거").font(.headline.weight(.heavy))
+                Spacer()
+                if store.result != nil {
+                    NavigationLink { MeasurementDetailView() } label: {
+                        HStack(spacing: 2) {
+                            Text("자세히")
+                            Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accentText)
                     }
-                } else if let r = store.result {
-                    HStack(spacing: 8) {
-                        tile("추정 오차", r.projectedAccuracy(at: ctx.date).map { String(format: "±%.0f", $0 * 1000) } ?? "—",
+                    .accessibilityHint("측정 근거 자세히 보기")
+                } else {
+                    Text("측정 후 표시").font(.subheadline).foregroundStyle(Theme.secondary)
+                }
+            }
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                HStack(alignment: .top, spacing: 8) {
+                    if let r = store.result {
+                        stat("추정 오차",
+                             r.projectedAccuracy(at: ctx.date).map { String(format: "±%.0f", $0 * 1000) } ?? "—",
                              unit: r.accuracy == nil ? nil : "ms")
-                        tile("사용 샘플", r.samples.isEmpty ? "—" : "\(r.usedCount)", unit: r.samples.isEmpty ? nil : "/\(r.samples.count)")
-                        tile("측정", Fmt.ago(r.syncedAt, now: ctx.date), unit: nil,
-                             color: ctx.date.timeIntervalSince(r.syncedAt) > 600 ? Theme.warning : (r.confidence?.color ?? Theme.ink))
+                        stat("사용 샘플", r.samples.isEmpty ? "—" : "\(r.usedCount)",
+                             unit: r.samples.isEmpty ? nil : "/\(r.samples.count)")
+                        stat("마지막 측정", Fmt.ago(r.syncedAt, now: ctx.date), unit: nil,
+                             color: ctx.date.timeIntervalSince(r.syncedAt) > 600 ? Theme.warning : Theme.ink)
+                    } else {
+                        stat("추정 오차", "±—", unit: nil, color: Theme.secondary)
+                        stat("사용 샘플", "—", unit: nil, color: Theme.secondary)
+                        stat("마지막 측정", "—", unit: nil, color: Theme.secondary)
                     }
                 }
             }
         }
-        .buttonStyle(.plain)
-        .disabled(store.result == nil)
-        .accessibilityHint("측정 근거 자세히 보기")
     }
 
-    private func tile(_ title: String, _ value: String, unit: String?, color: Color = Theme.ink) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func stat(_ title: String, _ value: String, unit: String?, color: Color = Theme.ink) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.caption).foregroundStyle(Theme.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(value).font(.title3.weight(.heavy).monospacedDigit()).foregroundStyle(color)
@@ -266,10 +281,7 @@ struct ContentView: View {
                 if let unit { Text(unit).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary) }
             }
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.border))
     }
 
     // MARK: - 일정
