@@ -2,6 +2,7 @@ import Foundation
 import AVKit
 import AVFoundation
 import UIKit
+import QuartzCore
 import Combine
 
 /// 시계를 AVSampleBufferDisplayLayer 에 그려서 PiP(화면 속 화면)로 띄웁니다.
@@ -37,6 +38,20 @@ final class PiPClockController: NSObject, ObservableObject {
         displayView.backgroundColor = PiPPalette.background
         setupPiP()
         loop.start()
+
+        // 앱이 앞에 있거나 PiP 가 떠 있을 때만 그림 (배터리 절약)
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.updateRendering() }
+        }
+        nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.updateRendering() }
+        }
+    }
+
+    private func updateRendering() {
+        let foreground = UIApplication.shared.applicationState != .background
+        loop.setActive(foreground || isActive || pipController?.isPictureInPictureActive == true)
     }
 
     private func setupPiP() {
@@ -59,7 +74,10 @@ final class PiPClockController: NSObject, ObservableObject {
         })
         observations.append(pip.observe(\.isPictureInPictureActive, options: [.initial, .new]) { [weak self] p, _ in
             let v = p.isPictureInPictureActive
-            Task { @MainActor in self?.isActive = v }
+            Task { @MainActor in
+                self?.isActive = v
+                self?.updateRendering()
+            }
         })
     }
 
@@ -158,6 +176,15 @@ final class ClockFrameLoop: @unchecked Sendable {
     private var lastKey = ""
     private var lastSecond: Double = 0
     private let timebase: CMTimebase?
+    /// 마지막으로 그린 시각 (프레임 수 제한용)
+    private var lastRenderAt: CFTimeInterval = 0
+    /// 최대 30fps
+    private static let minFrameInterval: CFTimeInterval = 1.0 / 30
+    private let activeLock = NSLock()
+    private var _active = true
+    /// 앱이 백그라운드이고 PiP 도 없으면 그리지 않음
+    func setActive(_ v: Bool) { activeLock.lock(); _active = v; activeLock.unlock() }
+    private var active: Bool { activeLock.lock(); defer { activeLock.unlock() }; return _active }
     /// 자동 닫기 시각에 도달했을 때 (렌더 큐에서 호출)
     var onAutoClose: (() -> Void)?
 
@@ -207,10 +234,17 @@ final class ClockFrameLoop: @unchecked Sendable {
         }
 
         // 카운트다운 소리
-        if second != lastSecond {
-            if lastSecond != 0 { beepIfNeeded(second: second, cfg: cfg) }
+        let secondChanged = second != lastSecond
+        if secondChanged {
+            if lastSecond != 0, active { beepIfNeeded(second: second, cfg: cfg) }
             lastSecond = second
         }
+
+        // 보이는 곳이 없으면 그리지 않음
+        guard active else { return }
+        // 0.01초·0.001초 표시여도 초당 30장까지만 (초가 바뀌는 순간은 바로 그림)
+        let nowHost = CACurrentMediaTime()
+        guard secondChanged || nowHost - lastRenderAt >= Self.minFrameInterval else { return }
 
         // 아래 줄: 사이트 이름 / 일정 카운트다운
         var parts: [String] = []
@@ -233,6 +267,7 @@ final class ClockFrameLoop: @unchecked Sendable {
         let key = cfg.style.rawValue + "|" + lines.map(\.text).joined(separator: "|") + (highlight ? "!" : "")
         guard key != lastKey else { return }
         lastKey = key
+        lastRenderAt = nowHost
 
         // PiP 크기가 바뀌면 새 크기의 버퍼로 (PiP 창 비율이 따라 바뀜)
         if cfg.style != currentStyle {

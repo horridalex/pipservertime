@@ -14,10 +14,6 @@ final class ClockStore: ObservableObject {
     @Published var siteName: String = UserDefaults.standard.string(forKey: "siteName") ?? "NOL 티켓(인터파크)" {
         didSet { Self.defaults.set(siteName, forKey: "siteName") }
     }
-    @Published var source: SyncSource =
-        SyncSource(rawValue: UserDefaults.standard.string(forKey: "syncSource") ?? "") ?? .auto {
-        didSet { Self.defaults.set(source.rawValue, forKey: "syncSource") }
-    }
     @Published var accuracyPreset: AccuracyPreset =
         AccuracyPreset(rawValue: UserDefaults.standard.string(forKey: "accuracyPreset") ?? "") ?? .normal {
         didSet { Self.defaults.set(accuracyPreset.rawValue, forKey: "accuracyPreset") }
@@ -113,7 +109,9 @@ final class ClockStore: ObservableObject {
     @Published private(set) var events: [ScheduledEvent] = {
         guard let d = UserDefaults.standard.data(forKey: "events"),
               let list = try? JSONDecoder().decode([ScheduledEvent].self, from: d) else { return [] }
-        return list
+        // 하루 넘게 지난 일정은 정리
+        let cutoff = Date().addingTimeInterval(-86_400)
+        return list.filter { $0.date > cutoff }
     }() {
         didSet {
             Self.defaults.set(try? JSONEncoder().encode(events), forKey: "events")
@@ -178,6 +176,8 @@ final class ClockStore: ObservableObject {
     let pip: PiPClockController
 
     private var syncTask: Task<Void, Never>?
+    /// 진행 중인 측정 식별자 (취소된 이전 측정의 진행 상황이 섞이지 않도록)
+    private var syncToken = UUID()
     private var eventTimer: Timer?
     /// 이미 자동 재측정한 (일정, 단계). 단계 0 = N분 전, 1 = 오픈 직전(1분 30초 전)
     private var resyncedEventIDs: Set<String> = []
@@ -231,23 +231,26 @@ final class ClockStore: ObservableObject {
 
     func sync() {
         syncTask?.cancel()
+        let token = UUID()
+        syncToken = token
         let text = urlText
         let name = siteName
-        let source = SyncSource.direct   // 측정 방식은 직접 측정으로 고정
         let level = accuracyLevel
         syncTask = Task { [weak self] in
-            await self?.performSync(text: text, name: name, source: source, level: level)
+            await self?.performSync(text: text, name: name, level: level, token: token)
         }
     }
 
     func cancelSync() {
         syncTask?.cancel()
         syncTask = nil
+        syncToken = UUID()
         isSyncing = false
         statusMessage = nil
     }
 
-    private func performSync(text: String, name: String, source: SyncSource, level: AccuracyLevel) async {
+    /// 측정 방식은 직접 측정으로 고정
+    private func performSync(text: String, name: String, level: AccuracyLevel, token: UUID) async {
         guard let target = URLNormalizer.normalize(text) else {
             lastError = "올바른 주소를 입력하세요."
             return
@@ -256,60 +259,40 @@ final class ClockStore: ObservableObject {
         lastError = nil
         liveSamples = []
         plannedSamples = level.plannedTotal
+        statusMessage = "서버에 시간 요청 중"
         defer {
-            if !Task.isCancelled { isSyncing = false; statusMessage = nil }
+            if syncToken == token { isSyncing = false; statusMessage = nil }
         }
 
-        var errors: [String] = []
-        let host = target.host ?? text
-
-        if source == .auto || source == .direct {
-            statusMessage = "서버에 시간 요청 중"
-            do {
-                let r = try await DirectServerTimeSource.measureOffset(url: target, level: level) { [weak self] p in
-                    Task { @MainActor in
-                        guard let self, self.isSyncing else { return }
-                        self.liveSamples = p.samples
-                        self.statusMessage = p.passes > 1 ? "서버에 시간 요청 중 · \(p.pass)/\(p.passes)차" : "서버에 시간 요청 중"
-                    }
+        do {
+            let r = try await DirectServerTimeSource.measureOffset(url: target, level: level) { [weak self] p in
+                Task { @MainActor in
+                    guard let self, self.syncToken == token else { return }
+                    self.liveSamples = p.samples
+                    self.statusMessage = p.passes > 1 ? "서버에 시간 요청 중 · \(p.pass)/\(p.passes)차" : "서버에 시간 요청 중"
                 }
-                guard !Task.isCancelled else { return }
-                apply(SyncResult(offset: r.offset, accuracy: r.accuracy, source: .direct, host: host,
-                                 siteName: name, syncedAt: Date(), confidence: r.confidence,
-                                 rttMedian: r.rttMedian, rttMin: r.rttMin,
-                                 passes: r.passes, samples: r.samples))
-                return
-            } catch is CancellationError {
-                return
-            } catch {
-                if Task.isCancelled { return }
-                errors.append("직접 측정: \(error.localizedDescription)")
+            }
+            guard syncToken == token, !Task.isCancelled else { return }
+            apply(SyncResult(offset: r.offset, accuracy: r.accuracy, source: .direct, host: target.host ?? text,
+                             siteName: name, syncedAt: Date(), confidence: r.confidence,
+                             rttMedian: r.rttMedian, rttMin: r.rttMin,
+                             passes: r.passes, samples: r.samples),
+                  url: text)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard syncToken == token, !Task.isCancelled else { return }
+            if let urlError = error as? URLError {
+                lastError = "측정 실패: \(urlError.localizedDescription)"
+            } else {
+                lastError = "측정 실패: \(error.localizedDescription)"
             }
         }
-
-        if source == .auto || source == .navyism {
-            statusMessage = "네이비즘에서 불러오는 중"
-            do {
-                let r = try await NavyismTimeSource.fetchOffset(for: target)
-                guard !Task.isCancelled else { return }
-                apply(SyncResult(offset: r.offset, accuracy: r.accuracy, source: .navyism,
-                                 host: host, siteName: name, syncedAt: Date()))
-                if !errors.isEmpty { lastError = errors.joined(separator: "\n") + "\n→ 네이비즘 값을 사용합니다." }
-                return
-            } catch is CancellationError {
-                return
-            } catch {
-                if Task.isCancelled { return }
-                errors.append("네이비즘: \(error.localizedDescription)")
-            }
-        }
-
-        lastError = errors.joined(separator: "\n")
     }
 
-    private func apply(_ r: SyncResult) {
+    private func apply(_ r: SyncResult, url: String) {
         result = r
-        rememberRecent(name: r.siteName, url: urlText)
+        rememberRecent(name: r.siteName, url: url)
         pushConfig()
         scheduleNotifications()
     }
@@ -425,7 +408,8 @@ final class ClockStore: ObservableObject {
         if stage == 1 { resyncedEventIDs.insert("\(e.id.uuidString)-0") }
         if let u = e.url, !u.isEmpty, u != urlText {
             urlText = u
-            siteName = URLNormalizer.normalize(u)?.host ?? u
+            // 저장된/기본 사이트면 그 이름을, 아니면 주소의 호스트를 이름으로
+            siteName = (presets + recentSites).first { $0.url == u }?.name ?? URLNormalizer.normalize(u)?.host ?? u
         }
         sync()
     }
