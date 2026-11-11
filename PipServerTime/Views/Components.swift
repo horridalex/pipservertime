@@ -37,28 +37,32 @@ struct SampleBars: View {
     var pendingColor: Color = Color.gray.opacity(0.25)
 
     var body: some View {
-        GeometryReader { geo in
+        // 막대가 수백 개여도 화면 폭 안에 들어가도록 Canvas 로 직접 그림
+        Canvas { ctx, size in
             let count = max(planned, samples.count, 1)
-            let spacing: CGFloat = 1.5
-            let w = max(1, (geo.size.width - spacing * CGFloat(count - 1)) / CGFloat(count))
+            // 간격은 막대 폭의 최대 40%, 1.5pt 를 넘지 않음
+            let slot = size.width / CGFloat(count)
+            let gap = min(1.5, slot * 0.4)
+            let w = max(0.5, slot - gap)
             let maxRTT = max(samples.map(\.rtt).max() ?? 0.1, 0.001)
-            HStack(alignment: .bottom, spacing: spacing) {
-                ForEach(0..<count, id: \.self) { i in
-                    if i < samples.count {
-                        let s = samples[i]
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(s.used ? usedColor : excludedColor)
-                            .frame(width: w, height: max(6, geo.size.height * CGFloat(s.rtt / maxRTT)))
-                    } else {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(pendingColor)
-                            .frame(width: w, height: geo.size.height * 0.25)
-                    }
+            for i in 0..<count {
+                let x = CGFloat(i) * slot
+                let h: CGFloat
+                let color: Color
+                if i < samples.count {
+                    let s = samples[i]
+                    h = max(6, size.height * CGFloat(s.rtt / maxRTT))
+                    color = s.used ? usedColor : excludedColor
+                } else {
+                    h = size.height * 0.25
+                    color = pendingColor
                 }
+                let rect = CGRect(x: x, y: size.height - h, width: w, height: h)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: min(1, w / 2)), with: .color(color))
             }
-            .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .frame(height: 70)
+        .accessibilityLabel("측정 샘플 \(samples.count)개 중 \(samples.filter(\.used).count)개 사용")
     }
 }
 
