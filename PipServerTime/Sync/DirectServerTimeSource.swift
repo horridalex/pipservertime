@@ -89,6 +89,9 @@ enum DirectServerTimeSource {
     struct Result: Equatable, Sendable {
         var offset: TimeInterval
         var accuracy: TimeInterval
+        /// 패스마다 따로 잰 값들의 최대 차이 (초). 오차보다 크게 벌어지면 서버마다 시각이 다를 가능성
+        var passSpread: TimeInterval
+        var multiServerSuspected: Bool
         var confidence: SyncConfidence
         var rttMedian: TimeInterval
         var rttMin: TimeInterval
@@ -132,6 +135,7 @@ enum DirectServerTimeSource {
         var allSamples: [Sample] = []
         var bounds: [(Bound, Int)] = []      // 모든 패스의 샘플을 누적 (범위, allSamples 인덱스)
         var passResults: [PassResult] = []
+        var independentMids: [Double] = []
         var nextID = 0
         let passes = max(1, level.passes)
 
@@ -188,7 +192,11 @@ enum DirectServerTimeSource {
                 report(pass)
             }
 
-            // 3) 이 패스까지 누적된 샘플의 합의 구간
+            // 3) 이 패스 샘플만으로 따로 낸 값 (서버 간 차이 감지용)
+            let thisPass = bounds.filter { allSamples[$0.1].pass == pass && allSamples[$0.1].used }.map { $0.0 }
+            if let own = Consensus(thisPass) { independentMids.append(own.mid) }
+
+            // 4) 이 패스까지 누적된 샘플의 합의 구간
             let used = usedBounds()
             if let c = Consensus(used) {
                 passResults.append(PassResult(pass: pass, rttMin: used.map(\.rtt).min() ?? 0,
@@ -209,13 +217,19 @@ enum DirectServerTimeSource {
         let usedRTTs = allSamples.filter(\.used).map(\.rtt)
         let usedRatio = Double(usedRTTs.count) / Double(max(1, allSamples.count))
 
+        let passSpread = (independentMids.max() ?? 0) - (independentMids.min() ?? 0)
+        // 패스끼리 오차 범위(±)를 훌쩍 넘게 다르면 서버가 여러 대이거나 서버 시각이 흔들리는 것
+        let multiServer = independentMids.count >= 2 && passSpread > max(0.04, accuracy * 2)
+
         let confidence: SyncConfidence = {
+            if multiServer { return accuracy <= 0.1 ? .medium : .low }
             if accuracy <= 0.04 && usedRatio >= 0.3 { return .high }
             if accuracy <= 0.1 { return .medium }
             return .low
         }()
 
-        return Result(offset: offset, accuracy: accuracy, confidence: confidence,
+        return Result(offset: offset, accuracy: accuracy, passSpread: passSpread, multiServerSuspected: multiServer,
+                      confidence: confidence,
                       rttMedian: median(usedRTTs.isEmpty ? allSamples.map(\.rtt) : usedRTTs),
                       rttMin: allSamples.map(\.rtt).min() ?? 0,
                       passes: passResults, samples: allSamples)
@@ -273,6 +287,22 @@ enum DirectServerTimeSource {
     }
 }
 
+/// 요청 하나의 iOS 측 타이밍 기록을 받아 둠
+private final class MetricsBox: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _metrics: URLSessionTaskMetrics?
+    var metrics: URLSessionTaskMetrics? { lock.lock(); defer { lock.unlock() }; return _metrics }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        lock.lock(); _metrics = metrics; lock.unlock()
+    }
+
+    /// 리다이렉트는 따라가지 않음 (작업별 대리자가 세션 대리자보다 우선하므로 여기서도 막음)
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? { nil }
+}
+
 /// 측정용 HTTP 클라이언트. 리다이렉트를 따라가지 않아(3xx 응답에도 Date 가 있음) 왕복 1회만 잰다.
 final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private lazy var session: URLSession = {
@@ -312,11 +342,23 @@ final class HTTPClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     }
 
     /// Date 헤더 샘플 1개
+    ///
+    /// 시각은 iOS 가 기록하는 '요청이 실제로 나간 순간(requestStart)'과 '응답 첫 바이트가 온 순간(responseStart)'을
+    /// 씁니다. 앱이 요청을 지시한 시각/응답을 다 받은 시각을 쓰면 연결 대기·응답 처리 시간까지 섞여 범위가 넓어집니다.
     func dateSample(_ url: URL) async throws -> DirectServerTimeSource.Bound? {
         let req = request(url, method: useHead ? "HEAD" : "GET")
-        let t0 = Date().timeIntervalSince1970
-        let (_, response) = try await session.data(for: req)
-        let t1 = Date().timeIntervalSince1970
+        let box = MetricsBox()
+        let wall0 = Date().timeIntervalSince1970
+        let (_, response) = try await session.data(for: req, delegate: box)
+        let wall1 = Date().timeIntervalSince1970
+        var t0 = wall0, t1 = wall1
+        if let tx = box.metrics?.transactionMetrics.last,
+           let start = tx.requestStartDate?.timeIntervalSince1970,
+           let first = tx.responseStartDate?.timeIntervalSince1970,
+           start >= wall0 - 0.05, first <= wall1 + 0.05, first >= start {
+            t0 = start
+            t1 = first
+        }
         let http = response as? HTTPURLResponse
         let date = http?.value(forHTTPHeaderField: "Date").flatMap { Self.httpDate.date(from: $0) }
         if useHead, date == nil || http?.statusCode == 405 || http?.statusCode == 501 {

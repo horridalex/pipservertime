@@ -26,7 +26,7 @@ struct PracticeView: View {
 
             // 스톱워치
             VStack(spacing: 6) {
-                TimelineView(.animation(minimumInterval: 0.005)) { _ in
+                TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
                     Text(formatSeconds(displayedValue()))
                         .font(.system(size: 72, weight: .heavy).monospacedDigit())
                         .foregroundStyle(Theme.clockText)

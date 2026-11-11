@@ -90,6 +90,10 @@ struct SyncResult: Equatable {
     var rttMin: TimeInterval?
     var passes: [DirectServerTimeSource.PassResult] = []
     var samples: [DirectServerTimeSource.Sample] = []
+    /// 패스별로 따로 잰 값의 최대 차이 (초)
+    var passSpread: TimeInterval?
+    /// 서버마다 시각이 다른 것으로 보임
+    var multiServerSuspected = false
 
     var usedCount: Int { samples.filter(\.used).count }
 

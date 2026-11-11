@@ -15,6 +15,9 @@ struct ContentView: View {
                     clockCard
                     if !store.isSyncing { statTiles }
                     scheduleCard
+                    if !store.isSyncing, let r = store.result, r.multiServerSuspected {
+                        multiServerWarning(r)
+                    }
                     if !store.isSyncing, let lead = store.result?.recommendedLead {
                         leadHint(lead)
                     }
@@ -150,7 +153,7 @@ struct ContentView: View {
     }
 
     private var clockBody: some View {
-        TimelineView(.animation(minimumInterval: 0.01)) { ctx in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
             let cfg = store.clock.config
             let server = ctx.date.addingTimeInterval(cfg.offset)
             VStack(alignment: .leading, spacing: 12) {
@@ -332,6 +335,19 @@ struct ContentView: View {
     /// 1시간 전부터 채워지는 진행 막대
     private func progress(_ remain: TimeInterval) -> Double {
         min(1, max(0, 1 - remain / 3600))
+    }
+
+    private func multiServerWarning(_ r: SyncResult) -> some View {
+        Label {
+            Text("이 사이트는 측정할 때마다 서버 시각이 최대 \(Int(((r.passSpread ?? 0) * 1000).rounded()))ms 달라요. 서버가 여러 대일 수 있어 실제 오차가 표시보다 클 수 있어요.")
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+        }
+        .font(.footnote)
+        .foregroundStyle(Theme.warning)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.warning.opacity(0.12)))
     }
 
     private func leadHint(_ lead: TimeInterval) -> some View {

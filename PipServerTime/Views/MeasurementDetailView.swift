@@ -13,6 +13,7 @@ struct MeasurementDetailView: View {
                         rttChart(r)
                         passTable(r)
                     }
+                    if r.multiServerSuspected { multiServerCard(r) }
                     if r.accuracy != nil { driftCard(r) }
                     if r.source == .navyism { navyismNote }
                 }
@@ -94,6 +95,15 @@ struct MeasurementDetailView: View {
                 Spacer()
                 Text(String(format: "%+.0fms", r.offset * 1000)).font(.body.monospaced().bold()).foregroundStyle(Theme.accentText)
             }
+        }
+    }
+
+    private func multiServerCard(_ r: SyncResult) -> some View {
+        Card {
+            Label("서버마다 시각이 달라요", systemImage: "exclamationmark.triangle.fill")
+                .font(.headline).foregroundStyle(Theme.warning)
+            Text("패스마다 따로 잰 값이 최대 \(Int(((r.passSpread ?? 0) * 1000).rounded()))ms 차이 나요. 사이트가 서버 여러 대를 쓰고 서버마다 시계가 조금씩 다른 경우예요. 예매 요청이 어느 서버로 갈지는 알 수 없어서, 실제 오차는 표시된 ±값보다 클 수 있어요.")
+                .font(.footnote).foregroundStyle(Theme.secondary)
         }
     }
 

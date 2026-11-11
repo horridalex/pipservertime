@@ -9,7 +9,7 @@ struct FocusClockView: View {
         ZStack(alignment: .topTrailing) {
             Theme.clockCard.ignoresSafeArea()
 
-            TimelineView(.animation(minimumInterval: 0.01)) { ctx in
+            TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
                 let cfg = store.clock.config
                 let now = ctx.date.addingTimeInterval(cfg.offset)
                 let remain: TimeInterval? = store.nextEvent.map { $0.date.timeIntervalSince(now) }

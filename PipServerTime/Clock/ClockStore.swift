@@ -277,7 +277,8 @@ final class ClockStore: ObservableObject {
             apply(SyncResult(offset: r.offset, accuracy: r.accuracy, source: .direct, host: target.host ?? text,
                              siteName: name, syncedAt: Date(), confidence: r.confidence,
                              rttMedian: r.rttMedian, rttMin: r.rttMin,
-                             passes: r.passes, samples: r.samples),
+                             passes: r.passes, samples: r.samples,
+                             passSpread: r.passSpread, multiServerSuspected: r.multiServerSuspected),
                   url: text)
         } catch is CancellationError {
             return
