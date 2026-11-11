@@ -78,6 +78,30 @@ struct ContentView: View {
                     }
                 }
 
+                Section {
+                    HStack {
+                        Text("미세 조정")
+                        Spacer()
+                        Text(store.manualAdjustMs == 0 ? "0 ms" : String(format: "%+d ms", store.manualAdjustMs))
+                            .monospacedDigit()
+                            .foregroundStyle(store.manualAdjustMs == 0 ? .secondary : .primary)
+                    }
+                    HStack(spacing: 8) {
+                        ForEach([-100, -10, 10, 100], id: \.self) { step in
+                            Button(String(format: "%+d", step)) { store.manualAdjustMs += step }
+                                .buttonStyle(.bordered)
+                                .frame(maxWidth: .infinity)
+                        }
+                        Button("0") { store.manualAdjustMs = 0 }
+                            .buttonStyle(.bordered)
+                            .disabled(store.manualAdjustMs == 0)
+                    }
+                } header: {
+                    Text("네이비즘 화면에 맞추기")
+                } footer: {
+                    Text("네이비즘 화면은 0.1초 간격으로 갱신되고 페이지 로딩 시간만큼 늦게 맞춰져서, 앱이 0.1~0.2초 빠르게 보일 수 있습니다. 네이비즘과 똑같이 보고 싶으면 −로 맞추세요. (값은 저장되고 동기화해도 유지됩니다)")
+                }
+
                 Section("표시") {
                     Toggle("0.1초 단위 표시", isOn: $store.showTenths)
                     Toggle("PiP 에 사이트 이름 표시", isOn: $store.showHostInPiP)

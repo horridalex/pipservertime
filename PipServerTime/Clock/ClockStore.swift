@@ -54,6 +54,14 @@ final class ClockStore: ObservableObject {
     @Published var showHostInPiP: Bool = UserDefaults.standard.bool(forKey: "showHost") {
         didSet { Self.defaults.set(showHostInPiP, forKey: "showHost"); pip.showHost = showHostInPiP }
     }
+    /// 사용자가 직접 넣는 미세 조정 (ms). +면 시계가 빨라지고 -면 느려짐.
+    /// 네이비즘 화면은 0.1초 갱신 + 페이지 로딩 지연 때문에 계산값보다 조금 늦게 보이므로 그 차이를 맞추는 용도.
+    @Published var manualAdjustMs: Int = UserDefaults.standard.integer(forKey: "manualAdjustMs") {
+        didSet {
+            Self.defaults.set(manualAdjustMs, forKey: "manualAdjustMs")
+            applyToClock()
+        }
+    }
 
     @Published private(set) var result: SyncResult?
     @Published private(set) var isSyncing = false
@@ -71,6 +79,7 @@ final class ClockStore: ObservableObject {
         pip = PiPClockController(clock: c)
         pip.showTenths = showTenths
         pip.showHost = showHostInPiP
+        applyToClock()
     }
 
     static let presets: [Preset] = [
@@ -140,7 +149,12 @@ final class ClockStore: ObservableObject {
 
     private func apply(_ r: SyncResult) {
         result = r
-        clock.set(offset: r.offset, label: r.host)
+        applyToClock()
+    }
+
+    private func applyToClock() {
+        let base = result?.offset ?? 0
+        clock.set(offset: base + Double(manualAdjustMs) / 1000, label: result?.host ?? "기기 시간")
     }
 }
 
